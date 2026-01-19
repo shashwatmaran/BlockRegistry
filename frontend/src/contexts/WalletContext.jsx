@@ -11,6 +11,7 @@ const WalletContext = createContext({
     error: null,
     connectWallet: async () => { },
     disconnectWallet: () => { },
+    linkWalletToAccount: async () => { },
     switchNetwork: async () => { },
     getProvider: () => null,
     getSigner: async () => null,
@@ -114,6 +115,45 @@ export const WalletProvider = ({ children }) => {
         setError(null);
         localStorage.removeItem('walletConnected');
         localStorage.removeItem('walletAddress');
+    };
+
+    // Link wallet to user account
+    const linkWalletToAccount = async (userEmail) => {
+        if (!walletAddress) {
+            return { success: false, error: 'No wallet connected' };
+        }
+
+        try {
+            const signer = await getSigner();
+            if (!signer) {
+                return { success: false, error: 'Failed to get signer' };
+            }
+
+            // Create message to sign
+            const message = `Link wallet ${walletAddress} to account ${userEmail}`;
+
+            // Request user to sign message
+            const signature = await signer.signMessage(message);
+
+            // Import userAPI dynamically to avoid circular dependency
+            const { userAPI } = await import('../services/api');
+
+            // Send to backend
+            await userAPI.linkWallet(walletAddress, signature);
+
+            return { success: true };
+        } catch (error) {
+            console.error('Wallet linking failed:', error);
+            let errorMessage = 'Failed to link wallet';
+
+            if (error.code === 4001) {
+                errorMessage = 'Signature request rejected';
+            } else if (error.response?.data?.detail) {
+                errorMessage = error.response.data.detail;
+            }
+
+            return { success: false, error: errorMessage };
+        }
     };
 
     // Switch to correct network
@@ -244,6 +284,7 @@ export const WalletProvider = ({ children }) => {
         error,
         connectWallet,
         disconnectWallet,
+        linkWalletToAccount,
         switchNetwork,
         getProvider,
         getSigner,

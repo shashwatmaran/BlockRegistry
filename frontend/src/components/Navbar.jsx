@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X, Wallet, User, LogOut, Copy, Check, AlertTriangle } from 'lucide-react';
+import { Menu, X, Wallet, User, LogOut, Copy, Check, AlertTriangle, Link as LinkIcon } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,11 +13,14 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
+import { userAPI } from '@/services/api';
 import { toast } from 'sonner';
 
 export const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [addressCopied, setAddressCopied] = useState(false);
+  const [isWalletLinked, setIsWalletLinked] = useState(false);
+  const [checkingLinkStatus, setCheckingLinkStatus] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -28,6 +31,7 @@ export const Navbar = () => {
     loading,
     connectWallet,
     disconnectWallet,
+    linkWalletToAccount,
     switchNetwork,
     targetChainName
   } = useWallet();
@@ -41,6 +45,82 @@ export const Navbar = () => {
   ];
 
   const isActive = (path) => location.pathname === path;
+
+  // Check if wallet is linked to current user
+  useEffect(() => {
+    const checkWalletLinkStatus = async () => {
+      if (!user || !isConnected || !walletAddress) {
+        setIsWalletLinked(false);
+        return;
+      }
+
+      try {
+        setCheckingLinkStatus(true);
+        const status = await userAPI.getWalletStatus();
+        const linked = status.wallet_address?.toLowerCase() === walletAddress.toLowerCase();
+        setIsWalletLinked(linked);
+
+        // Auto-prompt to link if not linked
+        if (!linked && walletAddress) {
+          toast.info('Link your wallet?', {
+            description: `Connect ${walletAddress.substring(0, 6)}...${walletAddress.slice(-4)} to your account for blockchain features`,
+            action: {
+              label: 'Link Now',
+              onClick: async () => {
+                const result = await linkWalletToAccount(user.email);
+                if (result.success) {
+                  setIsWalletLinked(true);
+                  toast.success('Wallet linked successfully!');
+                } else {
+                  toast.error(result.error || 'Failed to link wallet');
+                }
+              },
+            },
+            duration: 10000,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to check wallet link status:', error);
+        setIsWalletLinked(false);
+      } finally {
+        setCheckingLinkStatus(false);
+      }
+    };
+
+    checkWalletLinkStatus();
+  }, [user, isConnected, walletAddress, linkWalletToAccount]);
+
+  // Handle wallet linking
+  const handleLinkWallet = async () => {
+    if (!user || !walletAddress) {
+      toast.error('Please login and connect wallet first');
+      return;
+    }
+
+    const result = await linkWalletToAccount(user.email);
+
+    if (result.success) {
+      setIsWalletLinked(true);
+      toast.success('Wallet linked successfully!', {
+        description: 'Your wallet is now connected to your account',
+      });
+    } else {
+      toast.error('Failed to link wallet', {
+        description: result.error || 'Please try again',
+      });
+    }
+  };
+
+  // Handle wallet unlinking
+  const handleUnlinkWallet = async () => {
+    try {
+      await userAPI.unlinkWallet();
+      setIsWalletLinked(false);
+      toast.success('Wallet unlinked from your account');
+    } catch (error) {
+      toast.error('Failed to unlink wallet');
+    }
+  };
 
   const handleWalletConnect = async () => {
     if (isConnected) {
@@ -188,6 +268,41 @@ export const Navbar = () => {
                       )}
                       <span className="text-xs font-mono">{walletAddress}</span>
                     </DropdownMenuItem>
+
+                    {/* Wallet Link Status */}
+                    {user && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">
+                          Account Link
+                        </DropdownMenuLabel>
+                        {isWalletLinked ? (
+                          <>
+                            <DropdownMenuItem disabled className="text-xs">
+                              <Check className="mr-2 h-3 w-3 text-success" />
+                              Linked to {user.email}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={handleUnlinkWallet}
+                              className="text-xs text-destructive focus:text-destructive"
+                            >
+                              <X className="mr-2 h-3 w-3" />
+                              Unlink Wallet
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <DropdownMenuItem
+                            onClick={handleLinkWallet}
+                            disabled={checkingLinkStatus}
+                            className="text-xs"
+                          >
+                            <LinkIcon className="mr-2 h-3 w-3" />
+                            {checkingLinkStatus ? 'Checking...' : 'Link to Account'}
+                          </DropdownMenuItem>
+                        )}
+                      </>
+                    )}
+
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={disconnectWallet} className="text-destructive focus:text-destructive">
                       <LogOut className="mr-2 h-4 w-4" />

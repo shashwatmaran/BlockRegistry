@@ -27,6 +27,8 @@ class UserModel:
         "full_name": "Optional[str]",  # User's full name
         "is_active": "bool",  # Account active status
         "is_verified": "bool",  # Email verification status
+        "wallet_address": "Optional[str]",  # Linked Ethereum wallet address
+        "wallet_linked_at": "Optional[datetime]",  # Wallet link timestamp
         "created_at": "datetime",  # Account creation timestamp
         "updated_at": "datetime",  # Last update timestamp
     }

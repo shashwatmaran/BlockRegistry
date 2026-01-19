@@ -35,6 +35,8 @@ class UserInDB(UserBase):
     hashed_password: str
     is_active: bool = True
     is_verified: bool = False
+    wallet_address: Optional[str] = None
+    wallet_linked_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     

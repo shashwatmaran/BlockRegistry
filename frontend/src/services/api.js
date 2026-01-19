@@ -111,4 +111,28 @@ export const landAPI = {
     },
 };
 
+// User API functions
+export const userAPI = {
+    // Link wallet address to user account
+    linkWallet: async (walletAddress, signature) => {
+        const response = await api.post('/users/link-wallet', {
+            wallet_address: walletAddress,
+            signature: signature,
+        });
+        return response.data;
+    },
+
+    // Unlink wallet from user account
+    unlinkWallet: async () => {
+        const response = await api.post('/users/unlink-wallet');
+        return response.data;
+    },
+
+    // Get wallet linking status
+    getWalletStatus: async () => {
+        const response = await api.get('/users/wallet-status');
+        return response.data;
+    },
+};
+
 export default api;
