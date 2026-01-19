@@ -68,7 +68,47 @@ export const authAPI = {
     },
 };
 
-// Land API functions removed as per requirement
-// export const landAPI = { ... };
+// Land API functions
+export const landAPI = {
+    // Register new land
+    registerLand: async (landData, files) => {
+        // Create FormData for file upload
+        const formData = new FormData();
+
+        // Add form fields
+        formData.append('title', landData.title);
+        formData.append('description', landData.description);
+        formData.append('area', parseFloat(landData.area));
+        formData.append('price', parseFloat(landData.price));
+        formData.append('lat', landData.lat);
+        formData.append('lng', landData.lng);
+        formData.append('address', landData.address);
+
+        // Add files
+        files.forEach((file) => {
+            formData.append('files', file);
+        });
+
+        const response = await api.post('/land/register', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+
+        return response.data;
+    },
+
+    // Get user's lands
+    getMyLands: async () => {
+        const response = await api.get('/land/my-lands');
+        return response.data;
+    },
+
+    // Get land by ID
+    getLandById: async (landId) => {
+        const response = await api.get(`/land/${landId}`);
+        return response.data;
+    },
+};
 
 export default api;

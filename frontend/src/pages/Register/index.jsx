@@ -14,7 +14,7 @@ import {
     Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
-// import { landAPI } from '@/services/api';
+import { landAPI } from '@/services/api';
 
 // Steps
 import { PropertyDetails } from './steps/PropertyDetails';
@@ -106,24 +106,25 @@ export const Register = () => {
         setLoading(true);
 
         try {
-            // Simulate network delay
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Prepare data for backend
+            const landData = {
+                title: formData.title,
+                description: formData.description,
+                area: formData.area,
+                price: formData.price,
+                lat: location.lat,
+                lng: location.lng,
+                address: location.address,
+            };
 
-            // const landData = {
-            //     title: formData.title,
-            //     description: formData.description,
-            //     area: parseFloat(formData.area),
-            //     price: parseFloat(formData.price),
-            //     lat: location.lat,
-            //     lng: location.lng,
-            //     address: location.address,
-            //     files: Object.values(uploadedFiles),
-            // };
+            // Convert uploadedFiles object to array
+            const files = Object.values(uploadedFiles);
 
-            // await landAPI.registerLand(landData);
+            // Call backend API
+            const result = await landAPI.registerLand(landData, files);
 
             toast.success('Property registered successfully!', {
-                description: 'Your property has been submitted and is pending verification.',
+                description: `Land ID: ${result.id}. Documents uploaded to IPFS.`,
             });
 
             // Reset form
@@ -150,8 +151,21 @@ export const Register = () => {
 
         } catch (error) {
             console.error('Registration error:', error);
+
+            let errorMessage = 'Registration failed. Please try again.';
+
+            if (error.response?.status === 400) {
+                errorMessage = error.response.data?.detail || 'Invalid data provided';
+            } else if (error.response?.status === 500) {
+                errorMessage = 'Server error. Failed to upload documents to IPFS.';
+            } else if (error.response?.data?.detail) {
+                errorMessage = error.response.data.detail;
+            } else if (!error.response) {
+                errorMessage = 'Network error. Please check your connection.';
+            }
+
             toast.error('Registration failed', {
-                description: 'Please try again later.',
+                description: errorMessage,
             });
         } finally {
             setLoading(false);
