@@ -68,4 +68,7 @@ export const authAPI = {
     },
 };
 
+// Land API functions removed as per requirement
+// export const landAPI = { ... };
+
 export default api;

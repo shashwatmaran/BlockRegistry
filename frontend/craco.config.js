@@ -49,15 +49,15 @@ const webpackConfig = {
     configure: (webpackConfig) => {
 
       // Add ignored patterns to reduce watched directories
-        webpackConfig.watchOptions = {
-          ...webpackConfig.watchOptions,
-          ignored: [
-            '**/node_modules/**',
-            '**/.git/**',
-            '**/build/**',
-            '**/dist/**',
-            '**/coverage/**',
-            '**/public/**',
+      webpackConfig.watchOptions = {
+        ...webpackConfig.watchOptions,
+        ignored: [
+          '**/node_modules/**',
+          '**/.git/**',
+          '**/build/**',
+          '**/dist/**',
+          '**/coverage/**',
+          '**/public/**',
         ],
       };
 
@@ -83,22 +83,35 @@ webpackConfig.devServer = (devServerConfig) => {
     devServerConfig = setupDevServer(devServerConfig);
   }
 
-  // Add health check endpoints if enabled
-  if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
-    const originalSetupMiddlewares = devServerConfig.setupMiddlewares;
+  // Workaround for react-scripts 5 deprecation warnings
+  // We capture and manually execute these hooks within setupMiddlewares,
+  // then delete them from the config so webpack-dev-server doesn't warn.
+  const { onBeforeSetupMiddleware, onAfterSetupMiddleware } = devServerConfig;
+  delete devServerConfig.onBeforeSetupMiddleware;
+  delete devServerConfig.onAfterSetupMiddleware;
 
-    devServerConfig.setupMiddlewares = (middlewares, devServer) => {
-      // Call original setup if exists
-      if (originalSetupMiddlewares) {
-        middlewares = originalSetupMiddlewares(middlewares, devServer);
-      }
+  const originalSetupMiddlewares = devServerConfig.setupMiddlewares;
 
-      // Setup health endpoints
+  devServerConfig.setupMiddlewares = (middlewares, devServer) => {
+    if (onBeforeSetupMiddleware) {
+      onBeforeSetupMiddleware(devServer);
+    }
+
+    if (originalSetupMiddlewares) {
+      middlewares = originalSetupMiddlewares(middlewares, devServer);
+    }
+
+    if (onAfterSetupMiddleware) {
+      onAfterSetupMiddleware(devServer);
+    }
+
+    // Add health check endpoints if enabled
+    if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
       setupHealthEndpoints(devServer, healthPluginInstance);
+    }
 
-      return middlewares;
-    };
-  }
+    return middlewares;
+  };
 
   return devServerConfig;
 };

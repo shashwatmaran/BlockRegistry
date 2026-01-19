@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "*"
     
+    # Pinata (IPFS)
+    PINATA_API_KEY: Optional[str] = None
+    PINATA_SECRET_API_KEY: Optional[str] = None
+    
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000

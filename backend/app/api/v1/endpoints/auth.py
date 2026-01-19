@@ -5,6 +5,7 @@ API endpoints for user authentication (login, register, etc.)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.db.mongodb import get_database
@@ -78,6 +79,32 @@ async def login(
     
     access_token = auth_service.create_user_token(user)
     
+    return Token(access_token=access_token, token_type="bearer")
+
+
+@router.post("/access-token", response_model=Token)
+async def login_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    OAuth2 compatible token login, get an access token for future requests
+    """
+    user = await auth_service.authenticate_user(
+        db,
+        form_data.username,
+        form_data.password
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token = auth_service.create_user_token(user)
+
     return Token(access_token=access_token, token_type="bearer")
 
 

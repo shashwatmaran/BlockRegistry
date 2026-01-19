@@ -40,6 +40,21 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     )
 
 
+
+def _sanitize_error_data(data):
+    """
+    Recursively sanitize error data to ensure it is JSON serializable.
+    Converts bytes to strings.
+    """
+    if isinstance(data, dict):
+        return {k: _sanitize_error_data(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [_sanitize_error_data(v) for v in data]
+    elif isinstance(data, bytes):
+        return data.decode("utf-8", errors="replace")
+    return data
+
+
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """
     Handler for request validation errors
@@ -62,7 +77,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
                 "message": "Validation error",
                 "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
                 "path": str(request.url.path),
-                "details": exc.errors()
+                "details": _sanitize_error_data(exc.errors())
             }
         },
     )

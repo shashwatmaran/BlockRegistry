@@ -40,7 +40,11 @@ async def connect_to_mongo() -> None:
     """
     try:
         logger.info("Connecting to MongoDB...")
-        database.client = AsyncIOMotorClient(settings.MONGO_URL)
+        import certifi
+        database.client = AsyncIOMotorClient(
+            settings.MONGO_URL,
+            tlsCAFile=certifi.where()
+        )
         database.db = database.client[settings.DB_NAME]
         
         # Verify connection

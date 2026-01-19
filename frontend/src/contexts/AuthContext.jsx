@@ -1,7 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '../services/api';
 
-const AuthContext = createContext();
+// Create context with a default value
+const AuthContext = createContext({
+    isAuthenticated: false,
+    user: null,
+    loading: true,
+    login: async () => ({ success: false, error: 'Not initialized' }),
+    register: async () => ({ success: false, error: 'Not initialized' }),
+    logout: () => { },
+});
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -83,7 +91,7 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
     };
 
-    const value = {
+    const contextValue = {
         isAuthenticated,
         user,
         login,
@@ -92,5 +100,9 @@ export const AuthProvider = ({ children }) => {
         loading,
     };
 
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    return (
+        <AuthContext.Provider value={contextValue}>
+            {children}
+        </AuthContext.Provider>
+    );
 };
