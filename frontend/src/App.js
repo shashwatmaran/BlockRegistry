@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { WalletProvider } from '@/contexts/WalletContext';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { Home } from '@/pages/Home';
@@ -41,9 +42,11 @@ function App() {
   return (
     <div className="App min-h-screen bg-background text-foreground">
       <AuthProvider>
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
+        <WalletProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </WalletProvider>
       </AuthProvider>
     </div>
   );

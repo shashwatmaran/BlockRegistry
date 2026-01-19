@@ -9,7 +9,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { DollarSign, Info } from 'lucide-react';
+import { IndianRupee, Info } from 'lucide-react';
 
 export const PropertyDetails = ({ formData, handleInputChange }) => {
     return (
@@ -56,9 +56,9 @@ export const PropertyDetails = ({ formData, handleInputChange }) => {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="price">Estimated Value (USD) *</Label>
+                    <Label htmlFor="price">Estimated Value (INR) *</Label>
                     <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <IndianRupee className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
                             id="price"
                             type="number"

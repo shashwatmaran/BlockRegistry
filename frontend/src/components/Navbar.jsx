@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X, Wallet, User, LogOut } from 'lucide-react';
+import { Menu, X, Wallet, User, LogOut, Copy, Check, AlertTriangle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,13 +12,25 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWallet } from '@/contexts/WalletContext';
+import { toast } from 'sonner';
 
 export const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [addressCopied, setAddressCopied] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const [walletConnected, setWalletConnected] = useState(false);
   const { user, logout } = useAuth();
+  const {
+    walletAddress,
+    isConnected,
+    isCorrectNetwork,
+    loading,
+    connectWallet,
+    disconnectWallet,
+    switchNetwork,
+    targetChainName
+  } = useWallet();
 
   const navLinks = [
     { name: 'Home', path: '/home' },
@@ -30,13 +42,46 @@ export const Navbar = () => {
 
   const isActive = (path) => location.pathname === path;
 
-  const handleWalletConnect = () => {
-    setWalletConnected(!walletConnected);
+  const handleWalletConnect = async () => {
+    if (isConnected) {
+      disconnectWallet();
+      toast.success('Wallet disconnected');
+    } else {
+      const result = await connectWallet();
+      if (result.success) {
+        toast.success('Wallet connected successfully!');
+      } else {
+        toast.error(result.error || 'Failed to connect wallet');
+      }
+    }
+  };
+
+  const handleCopyAddress = () => {
+    if (walletAddress) {
+      navigator.clipboard.writeText(walletAddress);
+      setAddressCopied(true);
+      toast.success('Address copied to clipboard');
+      setTimeout(() => setAddressCopied(false), 2000);
+    }
+  };
+
+  const handleSwitchNetwork = async () => {
+    const result = await switchNetwork();
+    if (result.success) {
+      toast.success(`Switched to ${targetChainName} network`);
+    } else {
+      toast.error(result.error || 'Failed to switch network');
+    }
   };
 
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const shortenAddress = (address) => {
+    if (!address) return '';
+    return `${address.substring(0, 6)}...${address.slice(-4)}`;
   };
 
   return (
@@ -77,7 +122,7 @@ export const Navbar = () => {
 
           {/* User Profile & Wallet */}
           <div className="hidden md:flex items-center space-x-4">
-            {/* User Profile Dropdown - Always visible when authenticated */}
+            {/* User Profile Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
@@ -108,16 +153,58 @@ export const Navbar = () => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Optional Wallet Connection */}
-            {walletConnected ? (
-              <div className="flex items-center space-x-2 px-3 py-2 bg-primary/10 border border-primary/30 rounded-lg">
-                <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
-                <span className="text-xs font-mono text-primary">{user?.walletAddress?.substring(0, 6)}...{user?.walletAddress?.slice(-3)}</span>
+            {/* Wallet Connection */}
+            {isConnected ? (
+              <div className="flex items-center gap-2">
+                {/* Wrong Network Warning */}
+                {!isCorrectNetwork && (
+                  <Button
+                    onClick={handleSwitchNetwork}
+                    variant="outline"
+                    size="sm"
+                    className="border-destructive text-destructive hover:bg-destructive/10"
+                  >
+                    <AlertTriangle className="mr-2 h-4 w-4" />
+                    Wrong Network
+                  </Button>
+                )}
+
+                {/* Wallet Address Display */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <div className="flex items-center space-x-2 px-3 py-2 bg-primary/10 border border-primary/30 rounded-lg cursor-pointer hover:bg-primary/20 transition-colors">
+                      <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+                      <span className="text-xs font-mono text-primary">{shortenAddress(walletAddress)}</span>
+                    </div>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuLabel>Connected Wallet</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleCopyAddress}>
+                      {addressCopied ? (
+                        <Check className="mr-2 h-4 w-4 text-success" />
+                      ) : (
+                        <Copy className="mr-2 h-4 w-4" />
+                      )}
+                      <span className="text-xs font-mono">{walletAddress}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={disconnectWallet} className="text-destructive focus:text-destructive">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Disconnect Wallet
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ) : (
-              <Button onClick={handleWalletConnect} variant="outline" size="default">
+              <Button
+                onClick={handleWalletConnect}
+                variant="outline"
+                size="default"
+                disabled={loading}
+              >
                 <Wallet className="mr-2 h-4 w-4" />
-                Connect Wallet
+                {loading ? 'Connecting...' : 'Connect Wallet'}
               </Button>
             )}
           </div>
@@ -149,14 +236,27 @@ export const Navbar = () => {
                 </Link>
               ))}
               <div className="pt-4 border-t border-border/40 space-y-2">
+                {/* Mobile Wallet */}
+                {!isCorrectNetwork && isConnected && (
+                  <Button
+                    onClick={handleSwitchNetwork}
+                    variant="outline"
+                    size="default"
+                    className="w-full border-destructive text-destructive hover:bg-destructive/10"
+                  >
+                    <AlertTriangle className="mr-2 h-4 w-4" />
+                    Switch to {targetChainName}
+                  </Button>
+                )}
                 <Button
                   onClick={handleWalletConnect}
                   variant="outline"
                   size="default"
                   className="w-full"
+                  disabled={loading}
                 >
                   <Wallet className="mr-2 h-4 w-4" />
-                  {walletConnected ? 'Disconnect Wallet' : 'Connect Wallet'}
+                  {isConnected ? `Disconnect ${shortenAddress(walletAddress)}` : loading ? 'Connecting...' : 'Connect Wallet'}
                 </Button>
                 <Button
                   onClick={handleLogout}
