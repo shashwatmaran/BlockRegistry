@@ -1,8 +1,8 @@
-# 🏛️ BlockRegistry — Blockchain Land Registry
+# BlockRegistry — Blockchain Land Registry
 
 A decentralized land registration and verification system built on the **Ethereum Sepolia testnet**. It uses smart contracts (ERC-721 NFTs) to represent land parcels, a FastAPI backend for business logic and IPFS integration, and a React frontend for citizen and verifier interactions.
 
-![BlockRegistry preview](frontend/public/blockregistry.png)
+![BlockRegistry preview](frontend\public\image.png)
 ---
 
 ## Architecture Overview
@@ -26,7 +26,7 @@ A decentralized land registration and verification system built on the **Ethereu
 
 ---
 
-## ✨ Features
+## Features
 
 - **Land Registration** — Citizens submit land details (area, price, GPS location) which are stored on IPFS and minted as NFTs on-chain.
 - **Verifier Dashboard** — Authorized verifiers can approve or reject pending land registrations directly on-chain.
@@ -38,7 +38,7 @@ A decentralized land registration and verification system built on the **Ethereu
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 Land_registry/
@@ -72,7 +72,7 @@ Land_registry/
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -91,7 +91,7 @@ Land_registry/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -170,7 +170,7 @@ App runs at: `http://localhost:3000`
 
 ---
 
-## ⚙️ Environment Variables
+## Environment Variables
 
 ### Backend (`backend/.env`)
 
@@ -209,7 +209,7 @@ REACT_APP_RPC_URL=https://rpc.sepolia.org
 
 ---
 
-## 🔐 User Roles
+## User Roles
 
 | Role | Description |
 |---|---|
@@ -226,7 +226,7 @@ cast send $LAND_REGISTRY_ADDRESS "grantRole(bytes32,address)" \
 
 ---
 
-## 📄 Smart Contracts
+## Smart Contracts
 
 | Contract | Description |
 |---|---|
@@ -235,7 +235,7 @@ cast send $LAND_REGISTRY_ADDRESS "grantRole(bytes32,address)" \
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ### Smart Contracts
 ```bash
@@ -250,20 +250,9 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-See [`TESTING_GUIDE.md`](./TESTING_GUIDE.md) for end-to-end testing instructions.
-
 ---
 
-## 📚 Additional Documentation
-
-- [`backend/BLOCKCHAIN_INTEGRATION.md`](./backend/BLOCKCHAIN_INTEGRATION.md) — How the backend interacts with smart contracts
-- [`frontend/BACKEND_API_INTEGRATION.md`](./frontend/BACKEND_API_INTEGRATION.md) — Frontend ↔ Backend API reference
-- [`frontend/VERIFIER_INTEGRATION.md`](./frontend/VERIFIER_INTEGRATION.md) — Verifier workflow guide
-- [`TESTING_GUIDE.md`](./TESTING_GUIDE.md) — Full testing guide
-
----
-
-## ⚠️ Security Notes
+## Security Notes
 
 - **Never commit** your `ADMIN_PRIVATE_KEY` or `JWT_SECRET_KEY` to version control.
 - The admin private key is used server-side to mint NFTs on behalf of users. Use a dedicated wallet with minimal funds.
@@ -271,6 +260,6 @@ See [`TESTING_GUIDE.md`](./TESTING_GUIDE.md) for end-to-end testing instructions
 
 ---
 
-## 📝 License
+## License
 
 This project is for educational purposes. No license is currently specified.
