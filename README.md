@@ -2,7 +2,8 @@
 
 A decentralized land registration and verification system built on the **Ethereum Sepolia testnet**. It uses smart contracts (ERC-721 NFTs) to represent land parcels, a FastAPI backend for business logic and IPFS integration, and a React frontend for citizen and verifier interactions.
 
-![BlockRegistry preview](frontend\public\image.png)
+![BlockRegistry preview](frontend/public/image.png)
+
 ---
 
 ## Architecture Overview
