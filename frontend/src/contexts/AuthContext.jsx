@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '../services/api';
 
-// Create context with a default value
 const AuthContext = createContext({
     isAuthenticated: false,
     user: null,
@@ -24,7 +23,6 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // Check if user is already logged in on mount
     useEffect(() => {
         const initAuth = async () => {
             const token = localStorage.getItem('access_token');
@@ -34,32 +32,28 @@ export const AuthProvider = ({ children }) => {
                     setUser(userData);
                     setIsAuthenticated(true);
                 } catch (error) {
-                    // Token invalid, clear storage
                     localStorage.removeItem('access_token');
                     localStorage.removeItem('user');
                 }
             }
             setLoading(false);
         };
-
         initAuth();
     }, []);
 
     const login = async (email, password) => {
         try {
             const data = await authAPI.login(email, password);
-
-            // Store token
             localStorage.setItem('access_token', data.access_token);
 
-            // Fetch user details
             const userData = await authAPI.getCurrentUser();
             localStorage.setItem('user', JSON.stringify(userData));
 
             setUser(userData);
             setIsAuthenticated(true);
 
-            return { success: true };
+            // Return the role so the Login page can redirect accordingly
+            return { success: true, role: userData.role };
         } catch (error) {
             console.error('Login error:', error);
             return {
@@ -72,8 +66,6 @@ export const AuthProvider = ({ children }) => {
     const register = async (userData) => {
         try {
             const response = await authAPI.register(userData);
-
-            // Return success - user can login manually
             return { success: true, user: response };
         } catch (error) {
             console.error('Registration error:', error);
@@ -91,17 +83,8 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
     };
 
-    const contextValue = {
-        isAuthenticated,
-        user,
-        login,
-        register,
-        logout,
-        loading,
-    };
-
     return (
-        <AuthContext.Provider value={contextValue}>
+        <AuthContext.Provider value={{ isAuthenticated, user, login, register, logout, loading }}>
             {children}
         </AuthContext.Provider>
     );

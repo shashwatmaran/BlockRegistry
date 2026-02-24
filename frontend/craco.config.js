@@ -83,6 +83,18 @@ webpackConfig.devServer = (devServerConfig) => {
     devServerConfig = setupDevServer(devServerConfig);
   }
 
+  // Fix HMR WebSocket port — the visual-edits plugin targets port 443 (cloud proxy),
+  // but locally the dev server runs on 3000. Override to prevent WS connection failures.
+  devServerConfig.client = {
+    ...devServerConfig.client,
+    webSocketURL: {
+      hostname: 'localhost',
+      pathname: '/ws',
+      port: 3000,
+      protocol: 'ws',
+    },
+  };
+
   // Workaround for react-scripts 5 deprecation warnings
   // We capture and manually execute these hooks within setupMiddlewares,
   // then delete them from the config so webpack-dev-server doesn't warn.

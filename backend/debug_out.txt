@@ -1,0 +1,12 @@
+﻿Connected: True, chain: 11155111
+Admin wallet: 0x32Df08d1Bc9161D0aD322b42EF1753F37264F8E1
+ETH balance:  0.599998517182540842 ETH
+Total lands on-chain: 1
+
+Simulating registerLand('QmTest123', 100, 500000, 'Test Location')
+  as caller: 0x32Df08d1Bc9161D0aD322b42EF1753F37264F8E1
+Simulation OK ù would return tokenId: 1
+
+Admin wallet roles on LandRegistry:
+  VERIFIER_ROLE: True
+  ADMIN_ROLE:    False

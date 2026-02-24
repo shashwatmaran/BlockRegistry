@@ -5,7 +5,7 @@ Aggregates all v1 API endpoints.
 """
 
 from fastapi import APIRouter
-from app.api.v1.endpoints import health, auth, land, users
+from app.api.v1.endpoints import health, auth, land, users, admin
 
 # Create main v1 router
 router = APIRouter()
@@ -15,6 +15,8 @@ router.include_router(health.router, tags=["health"])
 router.include_router(auth.router, prefix="/auth", tags=["authentication"])
 router.include_router(land.router, prefix="/land", tags=["land"])
 router.include_router(users.router, prefix="/users", tags=["users"])
+router.include_router(admin.router, prefix="/admin", tags=["admin"])
+
 
 # Add more endpoint routers here as the API grows
 # router.include_router(properties.router, prefix="/properties", tags=["properties"])

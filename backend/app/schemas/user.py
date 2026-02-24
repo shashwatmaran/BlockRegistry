@@ -19,6 +19,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Schema for user registration"""
     password: str = Field(..., min_length=8, max_length=100)
+    wallet_address: Optional[str] = None  # Ethereum address, provided manually
 
 
 class UserUpdate(BaseModel):
@@ -35,6 +36,7 @@ class UserInDB(UserBase):
     hashed_password: str
     is_active: bool = True
     is_verified: bool = False
+    role: str = "user"  # "user", "verifier", or "admin"
     wallet_address: Optional[str] = None
     wallet_linked_at: Optional[datetime] = None
     created_at: datetime
@@ -51,8 +53,10 @@ class UserResponse(UserBase):
     id: str = Field(..., alias="_id")
     is_active: bool
     is_verified: bool
+    role: str = "user"  # "user", "verifier", or "admin"
+    wallet_address: Optional[str] = None
     created_at: datetime
-    
+
     model_config = ConfigDict(
         populate_by_name=True
     )

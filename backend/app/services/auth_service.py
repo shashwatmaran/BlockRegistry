@@ -92,6 +92,8 @@ class AuthService:
             "hashed_password": get_password_hash(user_data.password),
             "is_active": True,
             "is_verified": False,
+            "role": "user",  # Default role; use seed_admin.py to create verifier/admin
+            "wallet_address": user_data.wallet_address,
             "created_at": now,
             "updated_at": now,
         }
@@ -114,7 +116,7 @@ class AuthService:
         Returns:
             JWT access token
         """
-        token_data = {"sub": user.email}
+        token_data = {"sub": user.email, "role": user.role}
         return create_access_token(token_data)
 
 

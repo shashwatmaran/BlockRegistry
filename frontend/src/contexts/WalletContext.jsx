@@ -11,7 +11,6 @@ const WalletContext = createContext({
     error: null,
     connectWallet: async () => { },
     disconnectWallet: () => { },
-    linkWalletToAccount: async () => { },
     switchNetwork: async () => { },
     getProvider: () => null,
     getSigner: async () => null,
@@ -56,7 +55,7 @@ export const WalletProvider = ({ children }) => {
         return await provider.getSigner();
     }, [getProvider]);
 
-    // Connect wallet
+    // Connect wallet - ONLY when user clicks
     const connectWallet = async () => {
         setLoading(true);
         setError(null);
@@ -86,10 +85,6 @@ export const WalletProvider = ({ children }) => {
             setWalletAddress(accounts[0]);
             setChainId(currentChainId);
 
-            // Store connection preference
-            localStorage.setItem('walletConnected', 'true');
-            localStorage.setItem('walletAddress', accounts[0]);
-
             return { success: true, address: accounts[0] };
         } catch (err) {
             console.error('Wallet connection error:', err);
@@ -108,52 +103,11 @@ export const WalletProvider = ({ children }) => {
         }
     };
 
-    // Disconnect wallet
+    // Disconnect wallet - clear all state
     const disconnectWallet = () => {
         setWalletAddress(null);
         setChainId(null);
         setError(null);
-        localStorage.removeItem('walletConnected');
-        localStorage.removeItem('walletAddress');
-    };
-
-    // Link wallet to user account
-    const linkWalletToAccount = async (userEmail) => {
-        if (!walletAddress) {
-            return { success: false, error: 'No wallet connected' };
-        }
-
-        try {
-            const signer = await getSigner();
-            if (!signer) {
-                return { success: false, error: 'Failed to get signer' };
-            }
-
-            // Create message to sign
-            const message = `Link wallet ${walletAddress} to account ${userEmail}`;
-
-            // Request user to sign message
-            const signature = await signer.signMessage(message);
-
-            // Import userAPI dynamically to avoid circular dependency
-            const { userAPI } = await import('../services/api');
-
-            // Send to backend
-            await userAPI.linkWallet(walletAddress, signature);
-
-            return { success: true };
-        } catch (error) {
-            console.error('Wallet linking failed:', error);
-            let errorMessage = 'Failed to link wallet';
-
-            if (error.code === 4001) {
-                errorMessage = 'Signature request rejected';
-            } else if (error.response?.data?.detail) {
-                errorMessage = error.response.data.detail;
-            }
-
-            return { success: false, error: errorMessage };
-        }
     };
 
     // Switch to correct network
@@ -211,12 +165,11 @@ export const WalletProvider = ({ children }) => {
 
         const handleAccountsChanged = (accounts) => {
             if (accounts.length === 0) {
-                // User disconnected all accounts
+                // User disconnected all accounts in MetaMask
                 disconnectWallet();
             } else if (accounts[0] !== walletAddress) {
                 // User switched accounts
                 setWalletAddress(accounts[0]);
-                localStorage.setItem('walletAddress', accounts[0]);
             }
         };
 
@@ -244,37 +197,6 @@ export const WalletProvider = ({ children }) => {
         };
     }, []);
 
-    // Auto-reconnect on mount if previously connected
-    useEffect(() => {
-        const wasConnected = localStorage.getItem('walletConnected');
-
-        if (wasConnected === 'true' && isMetaMaskInstalled()) {
-            // Silently reconnect
-            window.ethereum
-                .request({ method: 'eth_accounts' })
-                .then((accounts) => {
-                    if (accounts.length > 0) {
-                        setWalletAddress(accounts[0]);
-                        // Get current chain ID
-                        window.ethereum
-                            .request({ method: 'eth_chainId' })
-                            .then((currentChainId) => {
-                                setChainId(currentChainId);
-                            });
-                    } else {
-                        // No accounts available, clear storage
-                        localStorage.removeItem('walletConnected');
-                        localStorage.removeItem('walletAddress');
-                    }
-                })
-                .catch((err) => {
-                    console.error('Auto-reconnect failed:', err);
-                    localStorage.removeItem('walletConnected');
-                    localStorage.removeItem('walletAddress');
-                });
-        }
-    }, []);
-
     const contextValue = {
         walletAddress,
         isConnected,
@@ -284,7 +206,6 @@ export const WalletProvider = ({ children }) => {
         error,
         connectWallet,
         disconnectWallet,
-        linkWalletToAccount,
         switchNetwork,
         getProvider,
         getSigner,

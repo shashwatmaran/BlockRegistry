@@ -48,6 +48,7 @@ export const authAPI = {
             username: userData.username || userData.email.split('@')[0],
             password: userData.password,
             full_name: userData.fullName,
+            wallet_address: userData.walletAddress || null,
         });
         return response.data;
     },
@@ -131,6 +132,70 @@ export const userAPI = {
     // Get wallet linking status
     getWalletStatus: async () => {
         const response = await api.get('/users/wallet-status');
+        return response.data;
+    },
+};
+
+// Verifier API functions
+export const verifierAPI = {
+    // Get all lands needing verifier action (not_minted + pending)
+    getAllPendingLands: async () => {
+        const response = await api.get('/land/all-pending');
+        return response.data;
+    },
+
+    // Get only minted-but-unreviewed lands
+    getPendingLands: async () => {
+        const response = await api.get('/land/pending/list');
+        return response.data;
+    },
+
+    // Get all verified lands
+    getVerifiedLands: async () => {
+        const response = await api.get('/land/verified/list');
+        return response.data;
+    },
+
+    // Mint a land NFT on-chain (moves not_minted → pending)
+    mintLand: async (landId) => {
+        const response = await api.post(`/land/${landId}/mint`);
+        return response.data;
+    },
+
+    // Verify a land (admin key used on backend, no private key needed)
+    verifyLand: async (landId) => {
+        const response = await api.post(`/land/${landId}/verify`, {});
+        return response.data;
+    },
+
+    // Reject a land (reason only, no private key needed)
+    rejectLand: async (landId, reason) => {
+        const response = await api.post(`/land/${landId}/reject`, {
+            reason: reason,
+        });
+        return response.data;
+    },
+};
+
+// Admin API functions (admin role only)
+export const adminAPI = {
+    // List all users
+    getUsers: async () => {
+        const response = await api.get('/admin/users');
+        return response.data;
+    },
+
+    // Update a user's role
+    updateUserRole: async (userId, role) => {
+        const response = await api.patch(`/admin/users/${userId}/role`, { role });
+        return response.data;
+    },
+
+    // Set a user's public wallet address (for verifiers/admins)
+    setUserWallet: async (userId, walletAddress) => {
+        const response = await api.patch(`/admin/users/${userId}/wallet`, {
+            wallet_address: walletAddress || null,
+        });
         return response.data;
     },
 };

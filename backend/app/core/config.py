@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     PINATA_API_KEY: Optional[str] = None
     PINATA_SECRET_API_KEY: Optional[str] = None
     
+    # Blockchain (Sepolia Testnet)
+    SEPOLIA_RPC_URL: str
+    LAND_REGISTRY_ADDRESS: str = "0x5dcbc086ba6867e3c11aad2a5bcd7f55352699c4"
+    LAND_VERIFICATION_ADDRESS: str = "0xa267cbe01c92431b29073c81c142c81bc10f0462"
+    ADMIN_PRIVATE_KEY: str  # Private key for backend transactions (KEEP SECRET!)
+    
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000

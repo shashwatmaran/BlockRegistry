@@ -83,3 +83,37 @@ async def get_current_active_user(
         )
     
     return current_user
+
+
+async def get_current_verifier_or_admin(
+    current_user: UserInDB = Depends(get_current_active_user)
+) -> UserInDB:
+    """
+    Dependency for endpoints that require verifier or admin role.
+
+    Raises:
+        HTTPException 403: If the user's role is not 'verifier' or 'admin'
+    """
+    if current_user.role not in ("verifier", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verifier or admin role required"
+        )
+    return current_user
+
+
+async def get_current_admin(
+    current_user: UserInDB = Depends(get_current_active_user)
+) -> UserInDB:
+    """
+    Dependency for endpoints that require admin role only.
+
+    Raises:
+        HTTPException 403: If the user's role is not 'admin'
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required"
+        )
+    return current_user

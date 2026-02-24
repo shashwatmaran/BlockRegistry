@@ -24,7 +24,7 @@ export const ReviewSubmit = ({ formData, location, uploadedFiles }) => {
                     <div className="text-muted-foreground">Area:</div>
                     <div className="font-medium">{formData.area ? `${formData.area} sq ft` : 'Not specified'}</div>
                     <div className="text-muted-foreground">Value:</div>
-                    <div className="font-medium">{formData.price ? `$${formData.price}` : 'Not specified'}</div>
+                    <div className="font-medium">{formData.price ? `₹${formData.price}` : 'Not specified'}</div>
                     <div className="text-muted-foreground">Documents:</div>
                     <div className="font-medium">{Object.keys(uploadedFiles).length} file(s)</div>
                 </div>

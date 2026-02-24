@@ -35,6 +35,13 @@ class LandResponse(LandBase):
     status: str
     is_for_sale: bool
     blockchain_id: Optional[int] = None
+    # Blockchain verification fields
+    blockchain_status: str = "not_minted"
+    token_id: Optional[int] = None
+    blockchain_tx_hash: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    verified_by: Optional[str] = None
+    rejection_reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
