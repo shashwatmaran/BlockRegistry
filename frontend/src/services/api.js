@@ -200,4 +200,32 @@ export const adminAPI = {
     },
 };
 
+// Explorer API functions (public — no auth required)
+export const explorerAPI = {
+    // Aggregate property/user counts for the stats cards
+    getStats: async () => {
+        const response = await api.get('/explorer/stats');
+        return response.data;
+    },
+
+    // 20 most-recently-updated land records as "transactions"
+    getTransactions: async () => {
+        const response = await api.get('/explorer/transactions');
+        return response.data;
+    },
+
+    // 20 most-recent land records for the Properties tab
+    getProperties: async () => {
+        const response = await api.get('/explorer/properties');
+        return response.data;
+    },
+
+    // Live Sepolia network info (block number, gas price, etc.)
+    getNetwork: async () => {
+        const response = await api.get('/explorer/network');
+        return response.data;
+    },
+};
+
 export default api;
+

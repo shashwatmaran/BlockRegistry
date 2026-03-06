@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,121 +26,156 @@ import {
   Users,
   Building,
   Hash,
+  Loader2,
+  AlertCircle,
+  Wifi,
+  WifiOff,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { explorerAPI } from '@/services/api';
 
 export const Explorer = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const networkStats = [
-    {
-      label: 'Total Blocks',
-      value: '1,234,567',
-      icon: Box,
-      trend: '+142',
-      color: 'primary',
-    },
-    {
-      label: 'Total Transactions',
-      value: '25,430',
-      icon: Activity,
-      trend: '+89',
-      color: 'secondary',
-    },
-    {
-      label: 'Properties Registered',
-      value: '10,245',
-      icon: Building,
-      trend: '+23',
-      color: 'accent',
-    },
-    {
-      label: 'Active Users',
-      value: '5,230',
-      icon: Users,
-      trend: '+156',
-      color: 'success',
-    },
-  ];
+  // API state
+  const [stats, setStats] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [properties, setProperties] = useState([]);
+  const [network, setNetwork] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const recentBlocks = [
-    {
-      number: 1234567,
-      hash: '0x7f3e9a2b8c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f',
-      timestamp: '12 seconds ago',
-      transactions: 42,
-      validator: '0x1a2b...3c4d',
-      size: '128 KB',
-    },
-    {
-      number: 1234566,
-      hash: '0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
-      timestamp: '24 seconds ago',
-      transactions: 38,
-      validator: '0x5e6f...7a8b',
-      size: '116 KB',
-    },
-    {
-      number: 1234565,
-      hash: '0x9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d',
-      timestamp: '36 seconds ago',
-      transactions: 51,
-      validator: '0x9c0d...1e2f',
-      size: '142 KB',
-    },
-    {
-      number: 1234564,
-      hash: '0x3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c',
-      timestamp: '48 seconds ago',
-      transactions: 29,
-      validator: '0x3a4b...5c6d',
-      size: '98 KB',
-    },
-  ];
+  useEffect(() => {
+    const fetchAll = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const [statsData, txData, propsData, networkData] = await Promise.all([
+          explorerAPI.getStats(),
+          explorerAPI.getTransactions(),
+          explorerAPI.getProperties(),
+          explorerAPI.getNetwork(),
+        ]);
+        setStats(statsData);
+        setTransactions(txData);
+        setProperties(propsData);
+        setNetwork(networkData);
+      } catch (err) {
+        console.error('Explorer fetch error:', err);
+        setError('Failed to load explorer data.');
+        toast.error('Failed to load blockchain explorer data');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const recentTransactions = [
-    {
-      hash: '0x7f3e9a2b8c1d4e5f6a7b8c9d0e1f2a3b',
-      type: 'Property Registration',
-      from: '0x1a2b...3c4d',
-      to: 'Registry Contract',
-      value: 'PROP-2024-001',
-      timestamp: '5 seconds ago',
-      status: 'confirmed',
-    },
-    {
-      hash: '0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d',
-      type: 'Ownership Transfer',
-      from: '0x5e6f...7a8b',
-      to: '0x9c0d...1e2f',
-      value: 'PROP-2023-890',
-      timestamp: '18 seconds ago',
-      status: 'confirmed',
-    },
-    {
-      hash: '0x9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b',
-      type: 'Document Update',
-      from: '0x3a4b...5c6d',
-      to: 'Registry Contract',
-      value: 'PROP-2024-002',
-      timestamp: '32 seconds ago',
-      status: 'confirmed',
-    },
-    {
-      hash: '0x3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e',
-      type: 'Verification',
-      from: 'Validator',
-      to: '0x7e8f...9a0b',
-      value: 'PROP-2024-003',
-      timestamp: '45 seconds ago',
-      status: 'pending',
-    },
-  ];
+    fetchAll();
+  }, []);
+
+  const networkStats = stats
+    ? [
+      {
+        label: 'Properties Registered',
+        value: stats.total_properties.toLocaleString(),
+        icon: Building,
+        trend: `+${stats.total_properties}`,
+        color: 'primary',
+      },
+      {
+        label: 'Verified On-Chain',
+        value: stats.verified_properties.toLocaleString(),
+        icon: CheckCircle,
+        trend: `${stats.verified_properties}`,
+        color: 'success',
+      },
+      {
+        label: 'Pending Review',
+        value: stats.pending_properties.toLocaleString(),
+        icon: Activity,
+        trend: `${stats.pending_properties}`,
+        color: 'secondary',
+      },
+      {
+        label: 'Active Users',
+        value: stats.active_users.toLocaleString(),
+        icon: Users,
+        trend: `+${stats.active_users}`,
+        color: 'accent',
+      },
+    ]
+    : [];
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     toast.success('Copied to clipboard');
   };
+
+  // Filter helper
+  const filterBySearch = (items, keys) => {
+    if (!searchTerm.trim()) return items;
+    const q = searchTerm.toLowerCase();
+    return items.filter((item) =>
+      keys.some((k) => String(item[k] ?? '').toLowerCase().includes(q))
+    );
+  };
+
+  const filteredTxns = filterBySearch(transactions, ['hash', 'type', 'value', 'from']);
+  const filteredProps = filterBySearch(properties, ['prop_id', 'title', 'address']);
+
+  const statusIcon = (status) => {
+    if (status === 'confirmed' || status === 'verified')
+      return <CheckCircle className="h-3 w-3 mr-1" />;
+    if (status === 'rejected')
+      return <XCircle className="h-3 w-3 mr-1" />;
+    return <Clock className="h-3 w-3 mr-1" />;
+  };
+
+  const statusClass = (status) => {
+    if (status === 'confirmed' || status === 'verified')
+      return 'bg-success/10 text-success border-success/30';
+    if (status === 'rejected')
+      return 'bg-destructive/10 text-destructive border-destructive/30';
+    return 'bg-warning/10 text-warning border-warning/30';
+  };
+
+  const blockchainStatusClass = (s) => {
+    if (s === 'verified') return 'bg-success/10 text-success border-success/30';
+    if (s === 'rejected') return 'bg-destructive/10 text-destructive border-destructive/30';
+    if (s === 'pending') return 'bg-warning/10 text-warning border-warning/30';
+    return 'bg-muted/50 text-muted-foreground border-border/50';
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen py-8">
+        <div className="container mx-auto px-4 flex items-center justify-center min-h-[60vh]">
+          <div className="flex flex-col items-center space-y-4">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="text-muted-foreground">Loading blockchain explorer…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen py-8">
+        <div className="container mx-auto px-4 flex items-center justify-center min-h-[60vh]">
+          <Card className="bg-card/50 backdrop-blur-sm max-w-md w-full">
+            <CardContent className="py-12 flex flex-col items-center space-y-4">
+              <AlertCircle className="h-10 w-10 text-destructive" />
+              <p className="text-muted-foreground text-center">{error}</p>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen py-8">
@@ -151,7 +186,7 @@ export const Explorer = () => {
             Blockchain Explorer
           </h1>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            View real-time blockchain activity, transactions, and property records
+            View real-time blockchain activity, transactions, and property records on Sepolia
           </p>
 
           {/* Search */}
@@ -159,7 +194,7 @@ export const Explorer = () => {
             <div className="relative">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
-                placeholder="Search by block number, transaction hash, or property ID..."
+                placeholder="Search by transaction hash, property ID, or address…"
                 className="pl-12 h-12 text-base"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -203,11 +238,11 @@ export const Explorer = () => {
         </div>
 
         {/* Main Content */}
-        <Tabs defaultValue="blocks" className="w-full">
+        <Tabs defaultValue="transactions" className="w-full">
           <TabsList className="grid w-full grid-cols-3 max-w-md mx-auto">
-            <TabsTrigger value="blocks">
-              <Box className="h-4 w-4 mr-2" />
-              Blocks
+            <TabsTrigger value="network">
+              <Zap className="h-4 w-4 mr-2" />
+              Network
             </TabsTrigger>
             <TabsTrigger value="transactions">
               <Activity className="h-4 w-4 mr-2" />
@@ -219,73 +254,135 @@ export const Explorer = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Blocks Tab */}
-          <TabsContent value="blocks" className="space-y-6">
-            <Card className="bg-card/50 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle>Recent Blocks</CardTitle>
-                <CardDescription>Latest blocks added to the blockchain</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Block</TableHead>
-                        <TableHead>Hash</TableHead>
-                        <TableHead>Transactions</TableHead>
-                        <TableHead>Validator</TableHead>
-                        <TableHead>Size</TableHead>
-                        <TableHead>Time</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {recentBlocks.map((block) => (
-                        <TableRow
-                          key={block.number}
-                          className="hover:bg-muted/50 cursor-pointer transition-colors"
-                        >
-                          <TableCell className="font-mono">
-                            <Badge variant="outline" className="bg-primary/10 text-primary">
-                              #{block.number}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <span className="font-mono text-xs truncate max-w-[120px]">
-                                {block.hash}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => copyToClipboard(block.hash)}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-6 w-6">
-                                <ExternalLink className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{block.transactions} txns</Badge>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">{block.validator}</TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            {block.size}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center text-xs text-muted-foreground">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {block.timestamp}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+          {/* Network Overview Tab */}
+          <TabsContent value="network" className="space-y-6">
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Live Sepolia Status */}
+              <Card className="bg-card/50 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg">
+                    {network?.connected ? (
+                      <Wifi className="h-5 w-5 mr-2 text-success" />
+                    ) : (
+                      <WifiOff className="h-5 w-5 mr-2 text-destructive" />
+                    )}
+                    Sepolia Network
+                  </CardTitle>
+                  <CardDescription>Live chain data from Web3 RPC</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Status</span>
+                    <Badge
+                      className={
+                        network?.connected
+                          ? 'bg-success/10 text-success border-success/30'
+                          : 'bg-destructive/10 text-destructive border-destructive/30'
+                      }
+                    >
+                      <div
+                        className={`w-2 h-2 rounded-full mr-2 animate-pulse ${network?.connected ? 'bg-success' : 'bg-destructive'
+                          }`}
+                      />
+                      {network?.connected ? 'Connected' : 'Disconnected'}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Network</span>
+                    <span className="text-sm font-medium">{network?.network_name ?? '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Chain ID</span>
+                    <span className="text-sm font-mono">{network?.chain_id ?? '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Latest Block</span>
+                    <span className="text-sm font-mono font-medium">
+                      {network?.latest_block != null
+                        ? `#${network.latest_block.toLocaleString()}`
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Gas Price</span>
+                    <span className="text-sm font-medium">
+                      {network?.gas_price_gwei != null
+                        ? `${network.gas_price_gwei} Gwei`
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Block Time</span>
+                    <span className="text-sm font-medium">
+                      {network?.block_time_seconds != null
+                        ? `~${network.block_time_seconds}s`
+                        : '~12s'}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Registry Stats */}
+              <Card className="bg-card/50 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg">
+                    <TrendingUp className="h-5 w-5 mr-2 text-primary" />
+                    Registry Stats
+                  </CardTitle>
+                  <CardDescription>Land Registry smart contract statistics</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Total Properties</span>
+                    <span className="text-sm font-bold">{stats?.total_properties ?? 0}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Verified</span>
+                    <Badge className="bg-success/10 text-success border-success/30">
+                      {stats?.verified_properties ?? 0}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Pending Review</span>
+                    <Badge className="bg-warning/10 text-warning border-warning/30">
+                      {stats?.pending_properties ?? 0}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Rejected</span>
+                    <Badge className="bg-destructive/10 text-destructive border-destructive/30">
+                      {stats?.rejected_properties ?? 0}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Active Users</span>
+                    <span className="text-sm font-bold">{stats?.active_users ?? 0}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Etherscan link */}
+            <Card className="bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/30">
+              <CardContent className="py-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center space-x-3">
+                  <Box className="h-6 w-6 text-primary" />
+                  <div>
+                    <p className="font-semibold">View on Etherscan</p>
+                    <p className="text-sm text-muted-foreground">
+                      Explore transactions directly on Sepolia Etherscan
+                    </p>
+                  </div>
                 </div>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    window.open('https://sepolia.etherscan.io', '_blank', 'noopener')
+                  }
+                >
+                  Open Etherscan
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -295,76 +392,97 @@ export const Explorer = () => {
             <Card className="bg-card/50 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle>Recent Transactions</CardTitle>
-                <CardDescription>Latest blockchain transactions</CardDescription>
+                <CardDescription>Latest land registry activity on the blockchain</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Tx Hash</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>From</TableHead>
-                        <TableHead>To</TableHead>
-                        <TableHead>Value</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Time</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {recentTransactions.map((tx) => (
-                        <TableRow
-                          key={tx.hash}
-                          className="hover:bg-muted/50 cursor-pointer transition-colors"
-                        >
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <span className="font-mono text-xs truncate max-w-[100px]">
-                                {tx.hash}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => copyToClipboard(tx.hash)}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">
-                              {tx.type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">{tx.from}</TableCell>
-                          <TableCell className="font-mono text-xs">{tx.to}</TableCell>
-                          <TableCell className="font-medium">{tx.value}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={
-                                tx.status === 'confirmed'
-                                  ? 'bg-success/10 text-success border-success/30'
-                                  : 'bg-warning/10 text-warning border-warning/30'
-                              }
-                            >
-                              {tx.status === 'confirmed' ? (
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                              ) : (
-                                <Clock className="h-3 w-3 mr-1" />
-                              )}
-                              {tx.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {tx.timestamp}
-                          </TableCell>
+                {filteredTxns.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 space-y-2">
+                    <Activity className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-muted-foreground">
+                      {searchTerm ? 'No transactions match your search.' : 'No transactions yet.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Tx / Land ID</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>From</TableHead>
+                          <TableHead>To</TableHead>
+                          <TableHead>Property</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Time</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredTxns.map((tx, i) => (
+                          <TableRow
+                            key={tx.hash || i}
+                            className="hover:bg-muted/50 cursor-pointer transition-colors"
+                          >
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <span className="font-mono text-xs truncate max-w-[100px]">
+                                  {tx.hash
+                                    ? `${tx.hash.slice(0, 10)}…${tx.hash.slice(-4)}`
+                                    : tx.land_id}
+                                </span>
+                                {tx.hash && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => copyToClipboard(tx.hash)}
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                )}
+                                {tx.hash && tx.hash.startsWith('0x') && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() =>
+                                      window.open(
+                                        `https://sepolia.etherscan.io/tx/${tx.hash}`,
+                                        '_blank',
+                                        'noopener'
+                                      )
+                                    }
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                                {tx.type}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">{tx.from}</TableCell>
+                            <TableCell className="font-mono text-xs">{tx.to}</TableCell>
+                            <TableCell className="font-medium text-xs">{tx.value}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={statusClass(tx.status)}
+                              >
+                                {statusIcon(tx.status)}
+                                {tx.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                              {tx.timestamp}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -373,53 +491,95 @@ export const Explorer = () => {
           <TabsContent value="properties" className="space-y-6">
             <Card className="bg-card/50 backdrop-blur-sm">
               <CardHeader>
-                <CardTitle>Recent Property Records</CardTitle>
-                <CardDescription>Latest property registrations on blockchain</CardDescription>
+                <CardTitle>Property Records</CardTitle>
+                <CardDescription>All land registrations on the blockchain</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div
-                      key={i}
-                      className="p-4 rounded-lg border border-border/50 hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all duration-300 cursor-pointer"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-2 flex-1">
-                          <div className="flex items-center space-x-2">
-                            <Building className="h-4 w-4 text-primary" />
-                            <span className="font-semibold">PROP-2024-00{i}</span>
-                            <Badge variant="outline" className="bg-success/10 text-success">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Verified
-                            </Badge>
+                {filteredProps.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 space-y-2">
+                    <Building className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-muted-foreground">
+                      {searchTerm ? 'No properties match your search.' : 'No properties found.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredProps.map((prop) => (
+                      <div
+                        key={prop.id}
+                        className="p-4 rounded-lg border border-border/50 hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all duration-300 cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-2 flex-1 min-w-0">
+                            <div className="flex items-center flex-wrap gap-2">
+                              <Building className="h-4 w-4 text-primary shrink-0" />
+                              <span className="font-semibold">{prop.prop_id}</span>
+                              <span className="text-sm font-medium truncate">{prop.title}</span>
+                              <Badge
+                                variant="outline"
+                                className={blockchainStatusClass(prop.blockchain_status)}
+                              >
+                                {prop.is_verified ? (
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                ) : prop.blockchain_status === 'rejected' ? (
+                                  <XCircle className="h-3 w-3 mr-1" />
+                                ) : (
+                                  <Clock className="h-3 w-3 mr-1" />
+                                )}
+                                {prop.blockchain_status.replace('_', ' ')}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground truncate">{prop.address}</p>
+                            <div className="flex items-center flex-wrap gap-4 text-xs text-muted-foreground">
+                              {prop.token_id != null && (
+                                <span className="flex items-center">
+                                  <Hash className="h-3 w-3 mr-1" />
+                                  Token #{prop.token_id}
+                                </span>
+                              )}
+                              <span className="flex items-center">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {prop.time_ago}
+                              </span>
+                              {prop.area > 0 && (
+                                <span>{prop.area.toLocaleString()} sq ft</span>
+                              )}
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            Residential Property - District {i}
-                          </p>
-                          <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                            <span className="flex items-center">
-                              <Hash className="h-3 w-3 mr-1" />
-                              Block #1234{567 - i}
-                            </span>
-                            <span className="flex items-center">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {i * 15} mins ago
-                            </span>
+                          <div className="flex flex-col items-end gap-2 shrink-0">
+                            {prop.price > 0 && (
+                              <span className="font-bold text-primary text-sm">
+                                ₹{(prop.price / 100000).toFixed(1)}L
+                              </span>
+                            )}
+                            {prop.tx_hash && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() =>
+                                  window.open(
+                                    `https://sepolia.etherscan.io/tx/${prop.tx_hash}`,
+                                    '_blank',
+                                    'noopener'
+                                  )
+                                }
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </Button>
+                            )}
                           </div>
                         </div>
-                        <Button variant="outline" size="sm">
-                          View Details
-                        </Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
 
-        {/* Network Info */}
+        {/* Bottom Info Cards */}
         <div className="grid md:grid-cols-3 gap-6">
           <Card className="bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/30">
             <CardHeader>
@@ -432,18 +592,31 @@ export const Explorer = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Status</span>
-                  <Badge className="bg-success/10 text-success border-success/30">
-                    <div className="w-2 h-2 bg-success rounded-full animate-pulse mr-2"></div>
-                    Active
+                  <Badge
+                    className={
+                      network?.connected
+                        ? 'bg-success/10 text-success border-success/30'
+                        : 'bg-destructive/10 text-destructive border-destructive/30'
+                    }
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full mr-2 ${network?.connected ? 'bg-success animate-pulse' : 'bg-destructive'
+                        }`}
+                    />
+                    {network?.connected ? 'Active' : 'Offline'}
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Block Time</span>
-                  <span className="text-sm font-medium">~12 seconds</span>
+                  <span className="text-sm font-medium">
+                    {network?.block_time_seconds ? `~${network.block_time_seconds}s` : '~12s'}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Gas Price</span>
-                  <span className="text-sm font-medium">15 Gwei</span>
+                  <span className="text-sm font-medium">
+                    {network?.gas_price_gwei != null ? `${network.gas_price_gwei} Gwei` : '—'}
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -453,22 +626,22 @@ export const Explorer = () => {
             <CardHeader>
               <CardTitle className="flex items-center text-lg">
                 <TrendingUp className="h-5 w-5 mr-2 text-secondary" />
-                24h Statistics
+                Registry Stats
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">New Properties</span>
-                  <span className="text-sm font-medium">+142</span>
+                  <span className="text-sm font-medium">+{stats?.total_properties ?? 0}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Transactions</span>
-                  <span className="text-sm font-medium">+1,234</span>
+                  <span className="text-sm text-muted-foreground">Verified</span>
+                  <span className="text-sm font-medium">+{stats?.verified_properties ?? 0}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Active Wallets</span>
-                  <span className="text-sm font-medium">+89</span>
+                  <span className="text-sm font-medium">+{stats?.active_users ?? 0}</span>
                 </div>
               </div>
             </CardContent>
@@ -478,21 +651,42 @@ export const Explorer = () => {
             <CardHeader>
               <CardTitle className="flex items-center text-lg">
                 <FileText className="h-5 w-5 mr-2 text-accent" />
-                Documentation
+                Resources
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <Button variant="ghost" className="w-full justify-start text-sm" size="sm">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-sm"
+                  size="sm"
+                  onClick={() =>
+                    window.open('https://sepolia.etherscan.io', '_blank', 'noopener')
+                  }
+                >
+                  Sepolia Etherscan
+                  <ExternalLink className="ml-auto h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-sm"
+                  size="sm"
+                  onClick={() =>
+                    window.open('http://localhost:8000/docs', '_blank', 'noopener')
+                  }
+                >
                   API Documentation
                   <ExternalLink className="ml-auto h-3 w-3" />
                 </Button>
-                <Button variant="ghost" className="w-full justify-start text-sm" size="sm">
-                  Smart Contracts
-                  <ExternalLink className="ml-auto h-3 w-3" />
-                </Button>
-                <Button variant="ghost" className="w-full justify-start text-sm" size="sm">
-                  Developer Guide
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-sm"
+                  size="sm"
+                  onClick={() =>
+                    window.open('https://ipfs.io', '_blank', 'noopener')
+                  }
+                >
+                  IPFS Gateway
                   <ExternalLink className="ml-auto h-3 w-3" />
                 </Button>
               </div>

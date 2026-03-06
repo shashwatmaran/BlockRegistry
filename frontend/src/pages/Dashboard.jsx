@@ -89,14 +89,66 @@ export const Dashboard = () => {
     status: land.status === 'pending' ? 'pending' : 'completed',
   }));
 
-  const getStatusBadge = (status) => {
-    const variants = {
-      verified: 'bg-success/10 text-success border-success/30',
-      approved: 'bg-success/10 text-success border-success/30',
-      pending: 'bg-warning/10 text-warning border-warning/30',
-      'in-progress': 'bg-info/10 text-info border-info/30',
+  const isVerified = (status) => status === 'approved' || status === 'verified';
+
+  const getStatusBadge = (status) =>
+    isVerified(status)
+      ? 'bg-success/10 text-success border-success/30'
+      : 'bg-warning/10 text-warning border-warning/30';
+
+  const getStatusLabel = (status) => (isVerified(status) ? 'Verified' : 'Pending');
+
+  const PropertyCard = ({ land, onClick }) => {
+    const verified = isVerified(land.status);
+    const property = {
+      id: land.id.substring(0, 12).toUpperCase(),
+      address: land.location?.address || 'Address not available',
+      status: land.status || 'pending',
+      area: `${land.area.toLocaleString()} sq ft`,
+      value: `₹${(land.price / 100000).toFixed(2)}L`,
+      date: new Date(land.created_at).toLocaleDateString('en-IN'),
     };
-    return variants[status] || variants.pending;
+    return (
+      <div
+        className={`p-4 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-all duration-300 cursor-pointer border-l-4 ${verified
+            ? 'border-border/50 border-l-success hover:border-l-success'
+            : 'border-border/50 border-l-warning hover:border-l-warning'
+          } ${onClick ? 'hover:border-primary/50' : ''}`}
+        onClick={onClick}
+      >
+        <div className="flex items-start justify-between mb-3">
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2">
+              <h3 className="font-semibold">{property.id}</h3>
+              <Badge variant="outline" className={getStatusBadge(property.status)}>
+                {verified ? (
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                ) : (
+                  <Clock className="h-3 w-3 mr-1" />
+                )}
+                {getStatusLabel(property.status)}
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">{property.address}</p>
+          </div>
+          <div className="text-right">
+            <div className="font-bold text-primary">{property.value}</div>
+            <div className="text-xs text-muted-foreground">{property.area}</div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center space-x-1">
+            <Calendar className="h-3 w-3" />
+            <span>{property.date}</span>
+          </div>
+          {!verified && (
+            <span className="text-warning text-xs font-medium flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" /> Awaiting approval
+            </span>
+          )}
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -156,8 +208,8 @@ export const Dashboard = () => {
                   <Badge
                     variant="outline"
                     className={`${stat.trend === 'up'
-                        ? 'bg-success/10 text-success border-success/30'
-                        : 'bg-destructive/10 text-destructive border-destructive/30'
+                      ? 'bg-success/10 text-success border-success/30'
+                      : 'bg-destructive/10 text-destructive border-destructive/30'
                       }`}
                   >
                     {stat.trend === 'up' ? (
@@ -194,117 +246,39 @@ export const Dashboard = () => {
                     {lands.length === 0 ? (
                       <p className="text-center text-muted-foreground py-8">No properties yet. Register your first property!</p>
                     ) : (
-                      lands.map((land) => {
-                        const property = {
-                          id: land.id.substring(0, 12).toUpperCase(),
-                          address: land.location?.address || 'Address not available',
-                          status: land.status || 'pending',
-                          area: `${land.area.toLocaleString()} sq ft`,
-                          value: `₹${(land.price / 100000).toFixed(2)}L`,
-                          date: new Date(land.created_at).toLocaleDateString('en-IN'),
-                        };
-                        return (
-                          <div
-                            key={property.id}
-                            className="p-4 rounded-lg border border-border/50 hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all duration-300 cursor-pointer"
-                            onClick={() => setSelectedProperty(property)}
-                          >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="space-y-1">
-                                <div className="flex items-center space-x-2">
-                                  <h3 className="font-semibold">{property.id}</h3>
-                                  <Badge variant="outline" className={getStatusBadge(property.status)}>
-                                    {property.status === 'verified' || property.status === 'approved' ? (
-                                      <CheckCircle className="h-3 w-3 mr-1" />
-                                    ) : (
-                                      <Clock className="h-3 w-3 mr-1" />
-                                    )}
-                                    {property.status}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground">{property.address}</p>
-                              </div>
-                              <div className="text-right">
-                                <div className="font-bold text-primary">{property.value}</div>
-                                <div className="text-xs text-muted-foreground">{property.area}</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <div className="flex items-center space-x-1">
-                                <Calendar className="h-3 w-3" />
-                                <span>{property.date}</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
+                      lands.map((land) => (
+                        <PropertyCard
+                          key={land.id}
+                          land={land}
+                          onClick={() =>
+                            setSelectedProperty({
+                              id: land.id.substring(0, 12).toUpperCase(),
+                              address: land.location?.address || 'Address not available',
+                              status: land.status || 'pending',
+                            })
+                          }
+                        />
+                      ))
                     )}
                   </TabsContent>
 
                   <TabsContent value="verified" className="space-y-4">
-                    {lands.filter((p) => p.status === 'approved').length === 0 ? (
+                    {lands.filter((p) => isVerified(p.status)).length === 0 ? (
                       <p className="text-center text-muted-foreground py-8">No verified properties yet.</p>
                     ) : (
                       lands
-                        .filter((p) => p.status === 'approved')
-                        .map((land) => {
-                          const property = {
-                            id: land.id.substring(0, 12).toUpperCase(),
-                            address: land.location?.address || 'Address not available',
-                            status: land.status || 'pending',
-                          };
-                          return (
-                            <div
-                              key={property.id}
-                              className="p-4 rounded-lg border border-border/50 bg-muted/30"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <h3 className="font-semibold">{property.id}</h3>
-                                  <p className="text-sm text-muted-foreground">{property.address}</p>
-                                </div>
-                                <Badge variant="outline" className={getStatusBadge(property.status)}>
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                  {property.status}
-                                </Badge>
-                              </div>
-                            </div>
-                          );
-                        })
+                        .filter((p) => isVerified(p.status))
+                        .map((land) => <PropertyCard key={land.id} land={land} />)
                     )}
                   </TabsContent>
 
                   <TabsContent value="pending" className="space-y-4">
-                    {lands.filter((p) => p.status === 'pending').length === 0 ? (
+                    {lands.filter((p) => !isVerified(p.status)).length === 0 ? (
                       <p className="text-center text-muted-foreground py-8">No pending properties.</p>
                     ) : (
                       lands
-                        .filter((p) => p.status === 'pending')
-                        .map((land) => {
-                          const property = {
-                            id: land.id.substring(0, 12).toUpperCase(),
-                            address: land.location?.address || 'Address not available',
-                            status: land.status || 'pending',
-                          };
-                          return (
-                            <div
-                              key={property.id}
-                              className="p-4 rounded-lg border border-border/50 bg-muted/30"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <h3 className="font-semibold">{property.id}</h3>
-                                  <p className="text-sm text-muted-foreground">{property.address}</p>
-                                </div>
-                                <Badge variant="outline" className={getStatusBadge(property.status)}>
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  {property.status}
-                                </Badge>
-                              </div>
-                            </div>
-                          );
-                        })
+                        .filter((p) => !isVerified(p.status))
+                        .map((land) => <PropertyCard key={land.id} land={land} />)
                     )}
                   </TabsContent>
                 </Tabs>
@@ -331,10 +305,10 @@ export const Dashboard = () => {
                     >
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${activity.status === 'completed'
-                            ? 'bg-success/10 text-success'
-                            : activity.status === 'pending'
-                              ? 'bg-warning/10 text-warning'
-                              : 'bg-info/10 text-info'
+                          ? 'bg-success/10 text-success'
+                          : activity.status === 'pending'
+                            ? 'bg-warning/10 text-warning'
+                            : 'bg-info/10 text-info'
                           }`}
                       >
                         {activity.status === 'completed' ? (
