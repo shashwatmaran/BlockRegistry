@@ -15,6 +15,9 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
     
+    // Required number of verifications before minting
+    uint256 public constant REQUIRED_VERIFICATIONS = 3;
+    
     // Token ID counter (replaces Counters library)
     uint256 private _nextTokenId;
     
@@ -43,6 +46,12 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
     
     // Mapping from owner to list of owned token IDs
     mapping(address => uint256[]) private _ownedLands;
+    
+    // Mapping to track number of verifications per token
+    mapping(uint256 => uint256) private _verificationCounts;
+    
+    // Mapping to track which validator verified which token
+    mapping(uint256 => mapping(address => bool)) private _hasVerified;
     
     // Events
     event LandRegistered(
@@ -105,11 +114,8 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
         
         uint256 tokenId = _nextTokenId++;
         
-        // Mint NFT to the sender
-        _safeMint(msg.sender, tokenId);
-        
-        // Set token URI to IPFS hash
-        _setTokenURI(tokenId, ipfsHash);
+        // Token is NOT minted yet; it will be minted after 3 verifications
+        // _safeMint and _setTokenURI are delayed to verifyLand
         
         // Store land metadata
         _landMetadata[tokenId] = LandMetadata({
@@ -136,18 +142,31 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
      * @dev Verify a land parcel (only verifiers)
      * @param tokenId ID of the land to verify
      */
-    function verifyLand(uint256 tokenId) public onlyRole(VERIFIER_ROLE) {
-        require(_ownerOf(tokenId) != address(0), "Land does not exist");
+    function verifyLand(uint256 tokenId, address verifierAddress) public onlyRole(VERIFIER_ROLE) {
+        require(_landMetadata[tokenId].currentOwner != address(0), "Land does not exist");
         require(
             _landMetadata[tokenId].status == VerificationStatus.Pending,
             "Land is not pending verification"
         );
+        require(!_hasVerified[tokenId][verifierAddress], "You have already verified this land");
         
-        _landMetadata[tokenId].status = VerificationStatus.Verified;
-        _landMetadata[tokenId].verifiedAt = block.timestamp;
-        _landMetadata[tokenId].verifiedBy = msg.sender;
+        _hasVerified[tokenId][verifierAddress] = true;
+        _verificationCounts[tokenId]++;
         
-        emit LandVerified(tokenId, msg.sender, block.timestamp);
+        if (_verificationCounts[tokenId] == REQUIRED_VERIFICATIONS) {
+            // Mint NFT to the owner finally
+            _safeMint(_landMetadata[tokenId].currentOwner, tokenId);
+            _setTokenURI(tokenId, _landMetadata[tokenId].ipfsHash);
+            
+            _landMetadata[tokenId].status = VerificationStatus.Verified;
+            _landMetadata[tokenId].verifiedAt = block.timestamp;
+            _landMetadata[tokenId].verifiedBy = verifierAddress;
+            
+            emit LandVerified(tokenId, verifierAddress, block.timestamp);
+        } else {
+            // Partial Verification
+            _landMetadata[tokenId].verifiedBy = verifierAddress;
+        }
     }
     
     /**
@@ -159,7 +178,7 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
         public 
         onlyRole(VERIFIER_ROLE) 
     {
-        require(_ownerOf(tokenId) != address(0), "Land does not exist");
+        require(_landMetadata[tokenId].currentOwner != address(0), "Land does not exist");
         require(
             _landMetadata[tokenId].status == VerificationStatus.Pending,
             "Land is not pending verification"
@@ -176,7 +195,7 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
      * @param tokenId ID of the land to transfer
      */
     function transferLand(address to, uint256 tokenId) public {
-        require(ownerOf(tokenId) == msg.sender, "You are not the owner");
+        require(_landMetadata[tokenId].currentOwner == msg.sender, "You are not the owner");
         require(
             _landMetadata[tokenId].status == VerificationStatus.Verified,
             "Only verified lands can be transferred"
@@ -207,11 +226,13 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
     function updateMetadata(uint256 tokenId, string memory newIpfsHash) 
         public 
     {
-        require(ownerOf(tokenId) == msg.sender, "You are not the owner");
+        require(_landMetadata[tokenId].currentOwner == msg.sender, "You are not the owner");
         require(bytes(newIpfsHash).length > 0, "IPFS hash cannot be empty");
         
         _landMetadata[tokenId].ipfsHash = newIpfsHash;
-        _setTokenURI(tokenId, newIpfsHash);
+        if (_landMetadata[tokenId].status == VerificationStatus.Verified) {
+            _setTokenURI(tokenId, newIpfsHash);
+        }
         
         emit MetadataUpdated(tokenId, newIpfsHash);
     }
@@ -226,8 +247,17 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
         view 
         returns (LandMetadata memory) 
     {
-        require(_ownerOf(tokenId) != address(0), "Land does not exist");
+        require(_landMetadata[tokenId].currentOwner != address(0), "Land does not exist");
         return _landMetadata[tokenId];
+    }
+    
+    /**
+     * @dev Get total number of verifications for a land
+     * @param tokenId ID of the land
+     * @return Number of verifications
+     */
+    function getVerificationCount(uint256 tokenId) public view returns (uint256) {
+        return _verificationCounts[tokenId];
     }
     
     /**

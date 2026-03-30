@@ -60,14 +60,14 @@ export const Documents = ({ uploadedFiles, setUploadedFiles }) => {
                                         )}
                                     </div>
                                     <div>
-                                        <p className="font-medium flex items-center">
+                                        <div className="font-medium flex items-center mb-1">
                                             {doc.name}
                                             {doc.required && (
                                                 <Badge variant="outline" className="ml-2 text-xs">
                                                     Required
                                                 </Badge>
                                             )}
-                                        </p>
+                                        </div>
                                         {uploadedFiles[doc.name] ? (
                                             <p className="text-xs text-success">
                                                 {uploadedFiles[doc.name].name}

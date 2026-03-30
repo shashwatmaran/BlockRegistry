@@ -8,9 +8,14 @@ contract LandRegistryTest is Test {
     LandRegistry public landRegistry;
     
     address public owner = address(1);
-    address public verifier = address(2);
+    address public verifier1 = address(2);
+    address public verifier2 = address(5);
+    address public verifier3 = address(6);
     address public user1 = address(3);
     address public user2 = address(4);
+    
+    // The backend uses a single admin wallet to relay txs on behalf of verifiers
+    address public adminRelayer = address(10);
     
     string constant IPFS_HASH = "QmTest123456789";
     uint256 constant LAND_AREA = 1000; // 1000 sq meters
@@ -22,9 +27,20 @@ contract LandRegistryTest is Test {
         vm.startPrank(owner);
         landRegistry = new LandRegistry();
         
-        // Grant verifier role
-        landRegistry.grantRole(landRegistry.VERIFIER_ROLE(), verifier);
+        // Grant verifier role to the relayer
+        landRegistry.grantRole(landRegistry.VERIFIER_ROLE(), adminRelayer);
+        
+        // You generally only need VERIFIER_ROLE for the msg.sender calling verifyLand.
         vm.stopPrank();
+    }
+    
+    function _fullyVerify(uint256 tokenId) internal {
+        vm.prank(adminRelayer);
+        landRegistry.verifyLand(tokenId, verifier1);
+        vm.prank(adminRelayer);
+        landRegistry.verifyLand(tokenId, verifier2);
+        vm.prank(adminRelayer);
+        landRegistry.verifyLand(tokenId, verifier3);
     }
     
     // ============ Registration Tests ============
@@ -39,7 +55,10 @@ contract LandRegistryTest is Test {
         );
         
         assertEq(tokenId, 0, "First token ID should be 0");
-        assertEq(landRegistry.ownerOf(tokenId), user1, "Owner should be user1");
+        
+        // Token is not minted yet
+        vm.expectRevert();
+        landRegistry.ownerOf(tokenId);
         
         LandRegistry.LandMetadata memory metadata = landRegistry.getLandDetails(tokenId);
         assertEq(metadata.ipfsHash, IPFS_HASH, "IPFS hash mismatch");
@@ -95,39 +114,56 @@ contract LandRegistryTest is Test {
         vm.prank(user1);
         uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
-        // Verify land
-        vm.prank(verifier);
-        landRegistry.verifyLand(tokenId);
+        // 1st Verification
+        vm.prank(adminRelayer);
+        landRegistry.verifyLand(tokenId, verifier1);
+        assertEq(landRegistry.getVerificationCount(tokenId), 1);
         
         LandRegistry.LandMetadata memory metadata = landRegistry.getLandDetails(tokenId);
+        assertTrue(metadata.status == LandRegistry.VerificationStatus.Pending);
+        
+        // 2nd Verification
+        vm.prank(adminRelayer);
+        landRegistry.verifyLand(tokenId, verifier2);
+        assertEq(landRegistry.getVerificationCount(tokenId), 2);
+        
+        // 3rd Verification
+        vm.prank(adminRelayer);
+        landRegistry.verifyLand(tokenId, verifier3);
+        assertEq(landRegistry.getVerificationCount(tokenId), 3);
+        
+        metadata = landRegistry.getLandDetails(tokenId);
         assertTrue(
             metadata.status == LandRegistry.VerificationStatus.Verified,
             "Status should be Verified"
         );
-        assertEq(metadata.verifiedBy, verifier, "Verifier mismatch");
+        assertEq(metadata.verifiedBy, verifier3, "Verifier mismatch (should be final verifier)");
         assertGt(metadata.verifiedAt, 0, "Verified at should be set");
+        
+        // Verify NFT is minted
+        assertEq(landRegistry.ownerOf(tokenId), user1);
     }
     
     function testVerifyLandRevertsForNonVerifier() public {
         vm.prank(user1);
         uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
-        vm.prank(user2);
+        vm.prank(user2); // Not admin Relayer!
         vm.expectRevert();
-        landRegistry.verifyLand(tokenId);
+        landRegistry.verifyLand(tokenId, verifier1);
     }
     
     function testVerifyLandRevertsForNonExistentLand() public {
-        vm.prank(verifier);
+        vm.prank(adminRelayer);
         vm.expectRevert("Land does not exist");
-        landRegistry.verifyLand(999);
+        landRegistry.verifyLand(999, verifier1);
     }
     
     function testRejectLand() public {
         vm.prank(user1);
         uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
-        vm.prank(verifier);
+        vm.prank(adminRelayer);
         landRegistry.rejectLand(tokenId, "Invalid documents");
         
         LandRegistry.LandMetadata memory metadata = landRegistry.getLandDetails(tokenId);
@@ -141,23 +177,33 @@ contract LandRegistryTest is Test {
         vm.prank(user1);
         uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
-        vm.prank(verifier);
-        landRegistry.verifyLand(tokenId);
+        _fullyVerify(tokenId);
         
-        vm.prank(verifier);
+        vm.prank(adminRelayer);
         vm.expectRevert("Land is not pending verification");
-        landRegistry.verifyLand(tokenId);
+        landRegistry.verifyLand(tokenId, address(99));
+    }
+    
+    function testCannotVerifyTwice() public {
+        vm.prank(user1);
+        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        
+        vm.prank(adminRelayer);
+        landRegistry.verifyLand(tokenId, verifier1);
+        
+        vm.prank(adminRelayer);
+        vm.expectRevert("You have already verified this land");
+        landRegistry.verifyLand(tokenId, verifier1);
     }
     
     // ============ Transfer Tests ============
     
     function testTransferVerifiedLand() public {
-        // Register and verify land
+        // Register and fully verify land
         vm.prank(user1);
         uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
-        vm.prank(verifier);
-        landRegistry.verifyLand(tokenId);
+        _fullyVerify(tokenId);
         
         // Transfer land
         vm.prank(user1);
@@ -188,8 +234,7 @@ contract LandRegistryTest is Test {
         vm.prank(user1);
         uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
-        vm.prank(verifier);
-        landRegistry.verifyLand(tokenId);
+        _fullyVerify(tokenId);
         
         vm.prank(user2);
         vm.expectRevert("You are not the owner");
@@ -241,10 +286,15 @@ contract LandRegistryTest is Test {
         vm.prank(user1);
         uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
-        vm.prank(verifier);
+        vm.prank(adminRelayer);
+        landRegistry.verifyLand(tokenId, verifier1);
+        vm.prank(adminRelayer);
+        landRegistry.verifyLand(tokenId, verifier2);
+        
+        vm.prank(adminRelayer);
         vm.expectEmit(true, true, false, true);
-        emit LandRegistry.LandVerified(tokenId, verifier, block.timestamp);
-        landRegistry.verifyLand(tokenId);
+        emit LandRegistry.LandVerified(tokenId, verifier3, block.timestamp);
+        landRegistry.verifyLand(tokenId, verifier3);
     }
     
     // ============ Access Control Tests ============
@@ -258,8 +308,8 @@ contract LandRegistryTest is Test {
     
     function testVerifierRole() public {
         assertTrue(
-            landRegistry.hasRole(landRegistry.VERIFIER_ROLE(), verifier),
-            "Verifier should have verifier role"
+            landRegistry.hasRole(landRegistry.VERIFIER_ROLE(), adminRelayer),
+            "adminRelayer should have verifier role"
         );
     }
 }

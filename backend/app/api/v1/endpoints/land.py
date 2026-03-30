@@ -8,7 +8,7 @@ from app.api.deps import get_current_user, get_current_verifier_or_admin
 from app.db.mongodb import get_database
 
 from app.models.land import LandModel
-from app.schemas.land import LandCreate, LandResponse, LocationSchema, DocumentSchema
+from app.schemas.land import LandCreate, LandResponse, LocationSchema, DocumentSchema, OwnershipVerificationResponse
 from app.schemas.user import UserInDB
 from app.schemas.verifier import (
     VerifyLandRequest,
@@ -72,6 +72,7 @@ async def register_land(
         "blockchain_tx_hash": None,
         "verified_at": None,
         "verified_by": None,
+        "verification_count": 0,
         "rejection_reason": None,
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
@@ -256,6 +257,74 @@ async def get_verified_lands(db = Depends(get_database)):
     return result
 
 
+@router.get("/verify-ownership/{land_id}", response_model=OwnershipVerificationResponse)
+async def verify_ownership(
+    land_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """
+    Verify ownership of a land parcel by reading both DB and on-chain data.
+    Returns rich blockchain ownership details including on-chain owner address,
+    IPFS hash, verification status, and Etherscan transaction link.
+    """
+    if not ObjectId.is_valid(land_id):
+        raise HTTPException(status_code=400, detail="Invalid land ID format")
+
+    land = await db[LandModel.collection_name].find_one({"_id": ObjectId(land_id)})
+    if not land:
+        raise HTTPException(status_code=404, detail="Land not found")
+
+    is_owner = str(land["owner_id"]) == str(current_user.id)
+    token_id = land.get("token_id")
+    blockchain_status = land.get("blockchain_status", "not_minted")
+    ipfs_hash = None
+    ipfs_url = None
+    on_chain_owner = None
+
+    # Try to fetch live on-chain data if the land has been minted
+    if token_id is not None:
+        try:
+            on_chain = blockchain_service.get_land_details(token_id)
+            if on_chain:
+                ipfs_hash = on_chain.get("ipfs_hash") or (land.get("documents") or [{}])[0].get("ipfs_hash")
+                on_chain_owner = on_chain.get("current_owner")
+                verification_count = on_chain.get("verification_count", 0)
+        except Exception as e:
+            print(f"[verify-ownership] blockchain lookup failed for token {token_id}: {e}")
+
+    # Fallback to DB documents for ipfs_hash if not fetched from chain
+    if not ipfs_hash:
+        docs = land.get("documents", [])
+        if docs:
+            ipfs_hash = docs[0].get("ipfs_hash")
+
+    if ipfs_hash:
+        ipfs_url = f"https://ipfs.io/ipfs/{ipfs_hash}"
+
+    tx_hash = land.get("blockchain_tx_hash")
+    etherscan_url = f"https://sepolia.etherscan.io/tx/{tx_hash}" if tx_hash else None
+
+    return OwnershipVerificationResponse(
+        land_id=land_id,
+        title=land.get("title", ""),
+        token_id=token_id,
+        blockchain_status=blockchain_status,
+        db_status=land.get("status", "pending"),
+        on_chain_owner=on_chain_owner,
+        ipfs_hash=ipfs_hash,
+        ipfs_url=ipfs_url,
+        verified_at=land.get("verified_at"),
+        verified_by=land.get("verified_by"),
+        verified_by_list=land.get("verified_by_list", []),
+        verification_count=verification_count if token_id is not None else land.get("verification_count", 0),
+        rejection_reason=land.get("rejection_reason"),
+        tx_hash=tx_hash,
+        etherscan_url=etherscan_url,
+        is_owned_by_current_user=is_owner,
+    )
+
+
 @router.get("/{land_id}", response_model=LandResponse)
 async def get_land(land_id: str, db = Depends(get_database)):
     """Get land by ID"""
@@ -299,26 +368,53 @@ async def verify_land(
     if token_id is None:
         raise HTTPException(status_code=400, detail="Land has no token ID (not minted yet)")
 
+    if current_user.wallet_address:
+        verifier_address = current_user.wallet_address
+    else:
+        # MongoDB ID is 24 hex chars. Pad to 40 hex chars to create a valid deterministic Ethereum address
+        padded_id = str(current_user.id).zfill(40)
+        verifier_address = f"0x{padded_id}"
     try:
-        result = blockchain_service.verify_land(token_id)
+        result = blockchain_service.verify_land(token_id, verifier_address)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Blockchain verification failed: {str(e)}")
+        error_msg = str(e)
+        if "execution reverted" in error_msg:
+            # Extract the pure revert reason if possible
+            reason = error_msg.split("execution reverted:")[-1].strip()
+            raise HTTPException(status_code=400, detail=f"Smart contract rejected the transaction: {reason}")
+        raise HTTPException(status_code=500, detail=f"Blockchain verification failed: {error_msg}")
 
     if not result or result.get("status") != "success":
         raise HTTPException(status_code=500, detail="Blockchain verification failed")
 
-    update_data = {
-        "blockchain_status": "verified",
-        "blockchain_tx_hash": result["tx_hash"],
-        "verified_at": datetime.utcnow(),
-        "verified_by": current_user.wallet_address or str(current_user.id),
-        "status": "verified",
-        "updated_at": datetime.utcnow()
-    }
+    # Fetch updated details to see if fully verified
+    details = blockchain_service.get_land_details(token_id)
+    verification_count = details.get("verification_count", 0) if details else 0
+
+    if verification_count >= 3:
+        update_data = {
+            "blockchain_status": "verified",
+            "blockchain_tx_hash": result["tx_hash"],
+            "verified_at": datetime.utcnow(),
+            "verified_by": verifier_address,
+            "status": "verified",
+            "verification_count": verification_count,
+            "updated_at": datetime.utcnow()
+        }
+    else:
+        update_data = {
+            "blockchain_tx_hash": result["tx_hash"],
+            "verification_count": verification_count,
+            "updated_at": datetime.utcnow()
+            # Status remains 'pending'
+        }
 
     await db[LandModel.collection_name].update_one(
         {"_id": ObjectId(land_id)},
-        {"$set": update_data}
+        {
+            "$set": update_data,
+            "$addToSet": {"verified_by_list": verifier_address}
+        }
     )
 
     return VerifyLandResponse(

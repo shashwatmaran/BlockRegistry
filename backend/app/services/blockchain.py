@@ -86,6 +86,7 @@ class BlockchainService:
             # [0] ipfsHash, [1] area, [2] price, [3] location,
             # [4] currentOwner, [5] status, [6] registeredAt,
             # [7] verifiedAt, [8] verifiedBy
+            count = self.land_registry.functions.getVerificationCount(token_id).call()
             return {
                 "ipfs_hash": details[0],
                 "area": details[1],
@@ -96,6 +97,7 @@ class BlockchainService:
                 "registered_at": details[6],
                 "verified_at": details[7],
                 "verified_by": details[8],
+                "verification_count": count,
             }
         except Exception as e:
             print(f"Error getting land details for token {token_id}: {e}")
@@ -128,18 +130,35 @@ class BlockchainService:
     def verify_land(
         self,
         token_id: int,
+        verifier_address: str,
     ) -> Optional[Dict[str, Any]]:
         """
         Verify a land on blockchain using the admin wallet.
+        Passes the verifier_address to be tracked on-chain.
         """
         try:
             admin_account = self.get_account_from_private_key(settings.ADMIN_PRIVATE_KEY)
             nonce = self.w3.eth.get_transaction_count(admin_account.address)
 
-            tx_params = self._build_tx_params(admin_account.address, gas=200000)
+            # Dynamically estimate gas instead of hardcoding 200k, as 3rd verification mints token
+            verifier_checksum = Web3.to_checksum_address(verifier_address)
+            try:
+                estimated_gas = self.land_registry.functions.verifyLand(
+                    token_id, 
+                    verifier_checksum
+                ).estimate_gas({"from": admin_account.address})
+                gas_limit = int(estimated_gas * 1.5)
+            except Exception as e:
+                gas_limit = 500000  # Fallback
+                print(f"Gas estimation failed for verifyLand: {e}")
+
+            tx_params = self._build_tx_params(admin_account.address, gas=gas_limit)
             tx_params['nonce'] = nonce
 
-            transaction = self.land_registry.functions.verifyLand(token_id).build_transaction(tx_params)
+            transaction = self.land_registry.functions.verifyLand(
+                token_id, 
+                verifier_checksum
+            ).build_transaction(tx_params)
 
             signed_txn = self.w3.eth.account.sign_transaction(
                 transaction,
@@ -176,7 +195,16 @@ class BlockchainService:
             admin_account = self.get_account_from_private_key(settings.ADMIN_PRIVATE_KEY)
             nonce = self.w3.eth.get_transaction_count(admin_account.address)
 
-            tx_params = self._build_tx_params(admin_account.address, gas=200000)
+            try:
+                estimated_gas = self.land_registry.functions.rejectLand(
+                    token_id, reason
+                ).estimate_gas({"from": admin_account.address})
+                gas_limit = int(estimated_gas * 1.5)
+            except Exception as e:
+                gas_limit = 500000
+                print(f"Gas estimation failed for rejectLand: {e}")
+
+            tx_params = self._build_tx_params(admin_account.address, gas=gas_limit)
             tx_params['nonce'] = nonce
 
             transaction = self.land_registry.functions.rejectLand(

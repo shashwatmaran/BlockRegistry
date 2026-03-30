@@ -18,6 +18,14 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Loader2,
+  ShieldCheck,
+  X,
+  Link,
+  ExternalLink,
+  Hash,
+  User,
+  ShieldAlert,
+  ShieldOff,
 } from 'lucide-react';
 import { landAPI } from '@/services/api';
 import { toast } from 'sonner';
@@ -28,6 +36,13 @@ export const Dashboard = () => {
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [lands, setLands] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Verify Ownership Modal state
+  const [verifyModalOpen, setVerifyModalOpen] = useState(false);
+  const [verifyLandId, setVerifyLandId] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState(null);
+  const [verifyError, setVerifyError] = useState(null);
 
   // Fetch lands on mount
   useEffect(() => {
@@ -98,6 +113,227 @@ export const Dashboard = () => {
 
   const getStatusLabel = (status) => (isVerified(status) ? 'Verified' : 'Pending');
 
+  // ── Verify Ownership handlers ────────────────────────────────────────────
+  const openVerifyModal = () => {
+    setVerifyLandId(lands.length > 0 ? lands[0].id : '');
+    setVerifyResult(null);
+    setVerifyError(null);
+    setVerifyModalOpen(true);
+  };
+
+  const handleVerifyOwnership = async () => {
+    if (!verifyLandId) return;
+    setVerifying(true);
+    setVerifyResult(null);
+    setVerifyError(null);
+    try {
+      const result = await landAPI.verifyOwnership(verifyLandId);
+      setVerifyResult(result);
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Verification failed. Please try again.';
+      setVerifyError(msg);
+      toast.error(msg);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  // ── VerifyOwnershipModal ─────────────────────────────────────────────────
+  const blockchainStatusConfig = {
+    verified: { label: 'Verified', icon: ShieldCheck, cls: 'bg-success/10 text-success border-success/30' },
+    pending: { label: 'Pending', icon: ShieldAlert, cls: 'bg-warning/10 text-warning border-warning/30' },
+    not_minted: { label: 'Not Minted', icon: ShieldOff, cls: 'bg-muted/60 text-muted-foreground border-border' },
+    rejected: { label: 'Rejected', icon: AlertCircle, cls: 'bg-destructive/10 text-destructive border-destructive/30' },
+  };
+
+  const VerifyOwnershipModal = () => {
+    if (!verifyModalOpen) return null;
+    const cfg = blockchainStatusConfig[verifyResult?.blockchain_status] || blockchainStatusConfig.not_minted;
+    const StatusIcon = cfg.icon;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+          onClick={() => setVerifyModalOpen(false)}
+        />
+        {/* Panel */}
+        <div className="relative z-10 w-full max-w-lg rounded-xl border border-border/60 bg-card shadow-2xl">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-border/50 px-6 py-4">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold font-['Space_Grotesk']">Verify Property Ownership</h2>
+            </div>
+            <button
+              onClick={() => setVerifyModalOpen(false)}
+              className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="px-6 py-5 space-y-5">
+            {/* Property selector */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Select Property</label>
+              {lands.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No properties registered yet.</p>
+              ) : (
+                <select
+                  value={verifyLandId}
+                  onChange={(e) => { setVerifyLandId(e.target.value); setVerifyResult(null); setVerifyError(null); }}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  {lands.map((land) => (
+                    <option key={land.id} value={land.id}>
+                      {land.title} — {land.id.substring(0, 12).toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Verify button */}
+            <Button
+              variant="gradient"
+              className="w-full"
+              disabled={!verifyLandId || verifying}
+              onClick={handleVerifyOwnership}
+            >
+              {verifying ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying on Blockchain...</>
+              ) : (
+                <><ShieldCheck className="mr-2 h-4 w-4" /> Verify Ownership</>
+              )}
+            </Button>
+
+            {/* Error */}
+            {verifyError && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{verifyError}</span>
+              </div>
+            )}
+
+            {/* Result */}
+            {verifyResult && (
+              <div className="space-y-4 rounded-lg border border-border/60 bg-muted/30 p-4">
+                {/* Status row */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{verifyResult.title}</span>
+                  <Badge variant="outline" className={cfg.cls}>
+                    <StatusIcon className="h-3 w-3 mr-1" />
+                    {cfg.label}
+                  </Badge>
+                </div>
+
+                <div className="divide-y divide-border/40 space-y-0">
+                  {/* Token ID */}
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1"><Hash className="h-3 w-3" /> Token ID</span>
+                    <span className="text-xs font-mono font-medium">{verifyResult.token_id ?? '—'}</span>
+                  </div>
+
+                  {/* On-chain owner */}
+                  <div className="flex items-center justify-between py-2 gap-4">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0"><User className="h-3 w-3" /> On-chain Owner</span>
+                    <span className="text-xs font-mono truncate max-w-[220px] text-right">
+                      {verifyResult.on_chain_owner
+                        ? `${verifyResult.on_chain_owner.substring(0, 8)}…${verifyResult.on_chain_owner.slice(-6)}`
+                        : '—'}
+                    </span>
+                  </div>
+
+                  {/* Ownership badge */}
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-xs text-muted-foreground">Ownership</span>
+                    <Badge variant="outline" className={verifyResult.is_owned_by_current_user
+                      ? 'bg-success/10 text-success border-success/30'
+                      : 'bg-destructive/10 text-destructive border-destructive/30'}>
+                      {verifyResult.is_owned_by_current_user ? '✓ Confirmed Owner' : '✗ Not Your Property'}
+                    </Badge>
+                  </div>
+
+                  {/* IPFS */}
+                  {verifyResult.ipfs_url && (
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1"><Link className="h-3 w-3" /> IPFS Document</span>
+                      <a
+                        href={verifyResult.ipfs_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary underline underline-offset-2 flex items-center gap-1 hover:text-primary/80"
+                      >
+                        View on IPFS <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Etherscan */}
+                  {verifyResult.etherscan_url && (
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Transaction</span>
+                      <a
+                        href={verifyResult.etherscan_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary underline underline-offset-2 flex items-center gap-1 hover:text-primary/80"
+                      >
+                        View on Etherscan <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Verified at */}
+                  {verifyResult.verified_at && (
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" /> Verified At</span>
+                      <span className="text-xs">{new Date(verifyResult.verified_at).toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+
+                  {/* Rejection reason */}
+                  {verifyResult.rejection_reason && (
+                    <div className="pt-2">
+                      <p className="text-xs text-destructive flex items-start gap-1">
+                        <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                        <span><span className="font-medium">Rejection reason:</span> {verifyResult.rejection_reason}</span>
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Not minted message */}
+                  {verifyResult.blockchain_status === 'not_minted' && (
+                    <div className="pt-2">
+                      <p className="text-xs text-muted-foreground flex items-start gap-1">
+                        <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                        This property hasn't been minted on-chain yet. It is awaiting verifier action.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Pending verification message */}
+                  {verifyResult.blockchain_status === 'pending' && (
+                    <div className="pt-2">
+                      <p className="text-xs text-warning flex items-start gap-1">
+                        <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                        This property is pending independent verifications. Current progress: <strong>{verifyResult.verification_count || 0} / 3 Approvals</strong>. It will be fully completed upon the 3rd approval.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+
+
   const PropertyCard = ({ land, onClick }) => {
     const verified = isVerified(land.status);
     const property = {
@@ -111,8 +347,8 @@ export const Dashboard = () => {
     return (
       <div
         className={`p-4 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-all duration-300 cursor-pointer border-l-4 ${verified
-            ? 'border-border/50 border-l-success hover:border-l-success'
-            : 'border-border/50 border-l-warning hover:border-l-warning'
+          ? 'border-border/50 border-l-success hover:border-l-success'
+          : 'border-border/50 border-l-warning hover:border-l-warning'
           } ${onClick ? 'hover:border-primary/50' : ''}`}
         onClick={onClick}
       >
@@ -127,6 +363,7 @@ export const Dashboard = () => {
                   <Clock className="h-3 w-3 mr-1" />
                 )}
                 {getStatusLabel(property.status)}
+                {property.status === 'pending' && property.verification_count !== undefined ? ` (${property.verification_count}/3)` : ''}
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground">{property.address}</p>
@@ -170,6 +407,7 @@ export const Dashboard = () => {
 
   return (
     <div className="min-h-screen py-8">
+      <VerifyOwnershipModal />
       <div className="container mx-auto px-4 space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -342,8 +580,8 @@ export const Dashboard = () => {
                   <Map className="mr-2 h-4 w-4" />
                   View Property Map
                 </Button>
-                <Button variant="outline" className="w-full justify-start">
-                  <FileCheck className="mr-2 h-4 w-4" />
+                <Button variant="outline" className="w-full justify-start" onClick={openVerifyModal}>
+                  <ShieldCheck className="mr-2 h-4 w-4" />
                   Verify Ownership
                 </Button>
                 <Button variant="outline" className="w-full justify-start">

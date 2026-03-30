@@ -110,6 +110,12 @@ export const landAPI = {
         const response = await api.get(`/land/${landId}`);
         return response.data;
     },
+
+    // Verify ownership of a land parcel (reads both DB + on-chain data)
+    verifyOwnership: async (landId) => {
+        const response = await api.get(`/land/verify-ownership/${landId}`);
+        return response.data;
+    },
 };
 
 // User API functions

@@ -8,6 +8,7 @@ import { Eye, CheckCircle, XCircle, AlertCircle, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner';
 
 import { verifierAPI } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const VerifierDashboard = () => {
     const [allLands, setAllLands] = useState([]);
@@ -34,13 +35,18 @@ export const VerifierDashboard = () => {
 
     // not_minted = submitted by user, docs uploaded, pending verifier review
     const pendingReview = allLands.filter(l => l.blockchain_status === 'not_minted');
-    // pending = minted on-chain, awaiting verify/reject decision
-    const needsVerification = allLands.filter(l => l.blockchain_status === 'pending');
+    
+    const { user } = useAuth();
+    const currentUserAddress = user?.wallet_address || (user?.id ? `0x${user.id.padStart(40, '0')}` : null);
+    
+    // pending = minted on-chain, awaiting verify/reject decision (excluding already approved)
+    const needsVerification = allLands.filter(l => l.blockchain_status === 'pending' && !l.verified_by_list?.includes(currentUserAddress));
 
-    const getStatusBadge = (status) => {
+    const getStatusBadge = (land) => {
+        const status = land.blockchain_status;
         const map = {
             'not_minted': { label: 'Under Review', variant: 'secondary', icon: AlertCircle },
-            'pending': { label: 'Awaiting Decision', variant: 'outline', icon: AlertCircle },
+            'pending': { label: `Awaiting Decision (${land.verification_count || 0}/3)`, variant: 'outline', icon: AlertCircle },
             'verified': { label: 'Verified', variant: 'success', icon: CheckCircle },
             'rejected': { label: 'Rejected', variant: 'destructive', icon: XCircle },
         };
@@ -60,7 +66,7 @@ export const VerifierDashboard = () => {
                     <CardTitle className="text-base leading-snug">
                         {land.title || `Land #${land.token_id ?? land.id.slice(-6)}`}
                     </CardTitle>
-                    {getStatusBadge(land.blockchain_status)}
+                    {getStatusBadge(land)}
                 </div>
                 <CardDescription className="line-clamp-1">
                     {land.location?.address || land.location || 'No address'}

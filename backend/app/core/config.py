@@ -36,8 +36,8 @@ class Settings(BaseSettings):
     
     # Blockchain (Sepolia Testnet)
     SEPOLIA_RPC_URL: str
-    LAND_REGISTRY_ADDRESS: str = "0x5dcbc086ba6867e3c11aad2a5bcd7f55352699c4"
-    LAND_VERIFICATION_ADDRESS: str = "0xa267cbe01c92431b29073c81c142c81bc10f0462"
+    LAND_REGISTRY_ADDRESS: str = "0x4a34834020b41a169ae41e7b54358baa03e44839"
+    LAND_VERIFICATION_ADDRESS: str = "0xd7798f641555515cd9bab59cf9b4e1781c49e6ba"
     ADMIN_PRIVATE_KEY: str  # Private key for backend transactions (KEEP SECRET!)
     
     # Server

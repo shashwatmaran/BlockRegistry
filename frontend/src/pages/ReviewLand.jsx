@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 
 import { landAPI, verifierAPI } from '@/services/api';
 import { MapView } from '@/components/MapView';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const ReviewLand = () => {
     const { tokenId: landId } = useParams(); // This is actually the land ID from MongoDB
@@ -23,6 +24,10 @@ export const ReviewLand = () => {
     const [showRejectDialog, setShowRejectDialog] = useState(false);
     const [showVerifyDialog, setShowVerifyDialog] = useState(false);
     const [rejectionReason, setRejectionReason] = useState('');
+
+    const { user } = useAuth();
+    const currentUserAddress = user?.wallet_address || (user?.id ? `0x${user.id.padStart(40, '0')}` : null);
+    const hasAlreadyVerified = land?.verified_by_list?.includes(currentUserAddress);
 
     const fetchLandDetails = useCallback(async () => {
         try {
@@ -155,13 +160,22 @@ export const ReviewLand = () => {
     };
 
     const getStatusBadge = (status) => {
-        const statusMap = {
-            'pending': { label: 'Pending', variant: 'secondary' },
-            'verified': { label: 'Verified', variant: 'success' },
-            'rejected': { label: 'Rejected', variant: 'destructive' },
-            'not_minted': { label: 'Not Minted', variant: 'outline' }
-        };
-        const { label, variant } = statusMap[status] || statusMap['pending'];
+        let label = 'Pending';
+        let variant = 'secondary';
+        
+        if (status === 'pending') {
+            label = `Pending (${land?.verification_count || 0}/3)`;
+        } else if (status === 'verified') {
+            label = 'Verified (3/3)';
+            variant = 'success';
+        } else if (status === 'rejected') {
+            label = 'Rejected';
+            variant = 'destructive';
+        } else if (status === 'not_minted') {
+            label = 'Not Minted';
+            variant = 'outline';
+        }
+
         return <Badge variant={variant}>{label}</Badge>;
     };
 
@@ -373,7 +387,7 @@ export const ReviewLand = () => {
                                 {land.blockchain_status === 'not_minted'
                                     ? 'Step 1 — Review & Mint'
                                     : land.blockchain_status === 'pending'
-                                        ? 'Step 2 — Verify or Reject'
+                                        ? `Step 2 — Verify or Reject (${land?.verification_count || 0}/3)`
                                         : 'Verification Complete'}
                             </CardTitle>
                             <CardDescription>
@@ -430,18 +444,25 @@ export const ReviewLand = () => {
                                 </>
                             ) : land.blockchain_status === 'pending' ? (
                                 <>
-                                    <div className="p-3 bg-muted rounded-md text-sm text-muted-foreground mb-2">
+                                    <div className="p-3 bg-muted rounded-md text-sm text-muted-foreground mb-4 border border-border">
                                         <p className="font-medium text-foreground mb-1">Step 2 — Approve or Reject</p>
-                                        <p>This land is minted on-chain (Token #{land.token_id}). Sign the transaction to complete verification.</p>
+                                        <p>This land has been minted on-chain. It requires <strong>3 independent approvals</strong> to be fully verified. Signing the transaction will log your approval to the blockchain.</p>
+                                        <div className="mt-3 bg-background p-2 rounded border border-border flex items-center justify-between">
+                                            <span className="font-medium text-foreground">Current Approvals:</span>
+                                            <Badge variant={land?.verification_count > 0 ? "default" : "secondary"} className="text-sm">
+                                                {land?.verification_count || 0} / 3
+                                            </Badge>
+                                        </div>
                                     </div>
                                     <Button
                                         onClick={() => setShowVerifyDialog(true)}
-                                        disabled={processing}
+                                        disabled={processing || hasAlreadyVerified}
                                         className="w-full"
                                         size="lg"
+                                        variant={hasAlreadyVerified ? "secondary" : "default"}
                                     >
                                         <CheckCircle className="w-4 h-4 mr-2" />
-                                        Approve & Verify
+                                        {hasAlreadyVerified ? "Already Approved" : "Approve & Verify"}
                                     </Button>
 
                                     <Button
