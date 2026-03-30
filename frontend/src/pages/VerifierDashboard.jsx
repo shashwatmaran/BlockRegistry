@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Eye, CheckCircle, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Eye, CheckCircle, XCircle, AlertCircle, RefreshCw, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { verifierAPI } from '@/services/api';
@@ -37,10 +37,15 @@ export const VerifierDashboard = () => {
     const pendingReview = allLands.filter(l => l.blockchain_status === 'not_minted');
     
     const { user } = useAuth();
-    const currentUserAddress = user?.wallet_address || (user?.id ? `0x${user.id.padStart(40, '0')}` : null);
+    const userId = user?.id || user?._id;
+    const currentUserAddress = user?.wallet_address ? user.wallet_address.toLowerCase() : (userId ? `0x${userId.padStart(40, '0')}`.toLowerCase() : null);
     
     // pending = minted on-chain, awaiting verify/reject decision (excluding already approved)
-    const needsVerification = allLands.filter(l => l.blockchain_status === 'pending' && !l.verified_by_list?.includes(currentUserAddress));
+    const needsVerification = allLands.filter(l => {
+        if (l.blockchain_status !== 'pending') return false;
+        if (!l.verified_by_list || !currentUserAddress) return true;
+        return !l.verified_by_list.some(addr => addr.toLowerCase() === currentUserAddress);
+    });
 
     const getStatusBadge = (land) => {
         const status = land.blockchain_status;
@@ -100,13 +105,25 @@ export const VerifierDashboard = () => {
                     )}
                 </div>
 
-                <Button
-                    onClick={() => navigate(`/verifier/review/${land.id}`)}
-                    className="w-full"
-                >
-                    <Eye className="w-4 h-4 mr-2" />
-                    {land.blockchain_status === 'not_minted' ? 'Review Documents' : 'Review & Verify'}
-                </Button>
+                <div className="flex gap-2 mt-4">
+                    <Button
+                        onClick={() => navigate(`/verifier/review/${land.id}`)}
+                        className="flex-1"
+                    >
+                        <Eye className="w-4 h-4 mr-2" />
+                        {land.blockchain_status === 'not_minted' ? 'Review Documents' : 'Review & Verify'}
+                    </Button>
+                    {land.blockchain_tx_hash && (
+                        <Button
+                            variant="outline"
+                            onClick={() => window.open(`https://sepolia.etherscan.io/tx/${land.blockchain_tx_hash}`, '_blank', 'noopener,noreferrer')}
+                            title="View on Etherscan"
+                            className="px-3"
+                        >
+                            <ExternalLink className="w-4 h-4 text-primary" />
+                        </Button>
+                    )}
+                </div>
             </CardContent>
         </Card>
     );

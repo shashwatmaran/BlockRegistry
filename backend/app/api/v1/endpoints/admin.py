@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from datetime import datetime
 
 from app.db.mongodb import get_database
+from app.models.land import LandModel
 from app.schemas.user import UserResponse, UserInDB
 from app.api.deps import get_current_admin
 
@@ -119,3 +120,24 @@ async def update_user_wallet(
     user["_id"] = str(user["_id"])
     user["wallet_address"] = body.wallet_address
     return user
+
+
+@router.get("/transfers/disputed")
+async def get_disputed_transfers(
+    current_user: UserInDB = Depends(get_current_admin),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Get all disputed transfers for admin mediation.
+    """
+    cursor = db[LandModel.collection_name].find({"transfer_status": "disputed"})
+    lands = await cursor.to_list(length=100)
+    
+    result = []
+    for land in lands:
+        land["_id"] = str(land["_id"])
+        land["id"] = land["_id"]
+        land["owner_id"] = str(land["owner_id"])
+        result.append(land)
+        
+    return result

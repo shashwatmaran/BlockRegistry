@@ -29,6 +29,7 @@ export const Register = () => {
     const [location, setLocation] = useState({ lat: null, lng: null, address: '' });
     const [uploadedFiles, setUploadedFiles] = useState({});
     const [formData, setFormData] = useState({
+        propertyId: '',
         title: '',
         propertyType: '',
         address: '',
@@ -88,8 +89,14 @@ export const Register = () => {
 
     const handleSubmit = async () => {
         // Validation
-        if (!formData.title || !formData.description || !formData.area || !formData.price) {
+        if (!formData.propertyId || !formData.title || !formData.description || !formData.area || !formData.price) {
             toast.error('Please fill in all required fields');
+            return;
+        }
+
+        const alphanumericSpaceRegex = /^[a-zA-Z0-9]{14}$/;
+        if (!alphanumericSpaceRegex.test(formData.propertyId)) {
+            toast.error('Property ID must be exactly 14 alphanumeric characters without spaces');
             return;
         }
 
@@ -108,6 +115,7 @@ export const Register = () => {
         try {
             // Prepare data for backend
             const landData = {
+                property_id: formData.propertyId.toUpperCase(),
                 title: formData.title,
                 description: formData.description,
                 area: formData.area,
@@ -129,6 +137,7 @@ export const Register = () => {
 
             // Reset form
             setFormData({
+                propertyId: '',
                 title: '',
                 propertyType: '',
                 address: '',

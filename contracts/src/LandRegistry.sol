@@ -30,6 +30,7 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
     
     // Land metadata structure
     struct LandMetadata {
+        string propertyId;         // Unique property identifier (14 chars)
         string ipfsHash;           // IPFS hash of land documents
         uint256 area;              // Area in square meters
         uint256 price;             // Price in wei
@@ -44,6 +45,9 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
     // Mapping from token ID to land metadata
     mapping(uint256 => LandMetadata) private _landMetadata;
     
+    // Mapping to track if a property ID is already registered
+    mapping(string => bool) private _isPropertyRegistered;
+    
     // Mapping from owner to list of owned token IDs
     mapping(address => uint256[]) private _ownedLands;
     
@@ -57,6 +61,7 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
     event LandRegistered(
         uint256 indexed tokenId,
         address indexed owner,
+        string propertyId,
         string ipfsHash,
         uint256 area,
         uint256 price
@@ -97,6 +102,7 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
     
     /**
      * @dev Register a new land parcel
+     * @param propertyId Unique 14-character alphanumeric ID
      * @param ipfsHash IPFS hash containing land documents
      * @param area Area of land in square meters
      * @param price Price of land in wei
@@ -104,21 +110,28 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
      * @return tokenId The ID of the newly minted land NFT
      */
     function registerLand(
+        string memory propertyId,
         string memory ipfsHash,
         uint256 area,
         uint256 price,
         string memory location
     ) public returns (uint256) {
+        require(bytes(propertyId).length == 14, "Property ID must be exactly 14 characters");
+        require(!_isPropertyRegistered[propertyId], "Property ID is already registered");
         require(bytes(ipfsHash).length > 0, "IPFS hash cannot be empty");
         require(area > 0, "Area must be greater than 0");
         
         uint256 tokenId = _nextTokenId++;
+        
+        // Mark property as registered to prevent duplicates
+        _isPropertyRegistered[propertyId] = true;
         
         // Token is NOT minted yet; it will be minted after 3 verifications
         // _safeMint and _setTokenURI are delayed to verifyLand
         
         // Store land metadata
         _landMetadata[tokenId] = LandMetadata({
+            propertyId: propertyId,
             ipfsHash: ipfsHash,
             area: area,
             price: price,
@@ -133,7 +146,7 @@ contract LandRegistry is ERC721URIStorage, AccessControl {
         // Add to owner's land list
         _ownedLands[msg.sender].push(tokenId);
         
-        emit LandRegistered(tokenId, msg.sender, ipfsHash, area, price);
+        emit LandRegistered(tokenId, msg.sender, propertyId, ipfsHash, area, price);
         
         return tokenId;
     }

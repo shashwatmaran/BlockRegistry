@@ -13,6 +13,8 @@ export const ReviewSubmit = ({ formData, location, uploadedFiles }) => {
                     Registration Summary
                 </h4>
                 <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-muted-foreground">Property ID:</div>
+                    <div className="font-medium font-mono">{formData.propertyId || 'Not specified'}</div>
                     <div className="text-muted-foreground">Property Title:</div>
                     <div className="font-medium">{formData.title || 'Not specified'}</div>
                     <div className="text-muted-foreground">Property Type:</div>

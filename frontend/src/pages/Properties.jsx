@@ -29,6 +29,7 @@ import {
   ExternalLink,
   XCircle,
   RefreshCw,
+  Mail,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { explorerAPI } from '@/services/api';
@@ -77,7 +78,6 @@ const getPropertyType = (title = '') => {
 
 export const Properties = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [sortBy, setSortBy] = useState('recent');
   const [viewMode, setViewMode] = useState('grid');
@@ -116,14 +116,12 @@ export const Properties = () => {
         (p.title || '').toLowerCase().includes(q) ||
         (p.address || '').toLowerCase().includes(q);
 
-      const matchStatus = filterStatus === 'all' || p.blockchain_status === filterStatus;
-
       const type = getPropertyType(p.title);
       const matchType =
         filterType === 'all' ||
         filterType.toLowerCase() === type.toLowerCase();
 
-      return matchSearch && matchStatus && matchType;
+      return matchSearch && matchType;
     })
     .sort((a, b) => {
       if (sortBy === 'value-high') return (b.price || 0) - (a.price || 0);
@@ -176,10 +174,10 @@ export const Properties = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold font-['Space_Grotesk'] mb-2">
-              Properties
+              Marketplace
             </h1>
             <p className="text-muted-foreground">
-              Browse and manage blockchain-verified properties.
+              Browse blockchain-verified properties available for sale.
             </p>
           </div>
           <Button variant="gradient" onClick={fetchProperties}>
@@ -205,20 +203,6 @@ export const Properties = () => {
 
               {/* Filters */}
               <div className="flex flex-wrap gap-3">
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[160px]">
-                    <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="verified">Verified</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="not_minted">Not Minted</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-
                 <Select value={filterType} onValueChange={setFilterType}>
                   <SelectTrigger className="w-[160px]">
                     <SelectValue placeholder="Property Type" />
@@ -374,9 +358,24 @@ export const Properties = () => {
 
                     {/* Action Buttons */}
                     <div className="flex gap-2 pt-2">
-                      <Button variant="default" size="sm" className="flex-1">
+                      <Button 
+                        variant="default" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => {
+                           if (property.owner_email && property.owner_email !== 'Unknown') {
+                             window.location.href = `mailto:${property.owner_email}?subject=Inquiry regarding Property ${property.prop_id}`;
+                           } else {
+                             toast.error("Owner contact missing");
+                           }
+                        }}
+                      >
+                        <Mail className="h-3 w-3 mr-1" />
+                        Contact Owner
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => toast.info("Property details available to buyer on request")}>
                         <Eye className="h-3 w-3 mr-1" />
-                        View Details
+                        Details
                       </Button>
                       {property.tx_hash && property.tx_hash.startsWith('0x') && (
                         <Button
@@ -394,12 +393,6 @@ export const Properties = () => {
                           <ExternalLink className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="sm" title="Share">
-                        <Share2 className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" title="Download">
-                        <Download className="h-4 w-4" />
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -422,7 +415,6 @@ export const Properties = () => {
                   variant="outline"
                   onClick={() => {
                     setSearchTerm('');
-                    setFilterStatus('all');
                     setFilterType('all');
                   }}
                 >

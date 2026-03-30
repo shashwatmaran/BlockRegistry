@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from datetime import datetime
 from bson import ObjectId
+from typing import Optional
 
 from app.api.deps import get_current_user
 from app.db.mongodb import get_database
@@ -31,6 +32,11 @@ class WalletResponse(BaseModel):
     wallet_address: str
     wallet_linked_at: str
     message: str
+
+class UserLookupResponse(BaseModel):
+    id: str
+    email: str
+    full_name: Optional[str] = None
 
 
 def verify_wallet_signature(wallet_address: str, signature: str, user_email: str) -> bool:
@@ -151,3 +157,24 @@ async def get_wallet_status(
         "wallet_linked_at": user.get("wallet_linked_at").isoformat() if user.get("wallet_linked_at") else None,
         "is_linked": bool(user.get("wallet_address"))
     }
+
+
+@router.get("/lookup", response_model=UserLookupResponse)
+async def lookup_user(
+    email: str,
+    current_user: UserInDB = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """
+    Lookup basic details of a user by email to verify they exist before transfer.
+    """
+    user = await db[UserModel.collection_name].find_one({"email": email.lower().strip()})
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    return UserLookupResponse(
+        id=str(user["_id"]),
+        email=user["email"],
+        full_name=user.get("full_name", user.get("username", "Unknown"))
+    )

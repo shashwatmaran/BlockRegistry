@@ -28,7 +28,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Shield, Users, RefreshCw, Crown, UserCheck, User as UserIcon } from 'lucide-react';
+import { Shield, Users, RefreshCw, Crown, UserCheck, User as UserIcon, Gavel, AlertTriangle, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminAPI } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -54,14 +54,19 @@ export const AdminDashboard = () => {
     const { user: currentUser } = useAuth();
     const navigate = useNavigate();
     const [users, setUsers] = useState([]);
+    const [disputes, setDisputes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [pendingChange, setPendingChange] = useState(null); // { userId, newRole, userName }
 
-    const fetchUsers = async () => {
+    const fetchData = async () => {
         setLoading(true);
         try {
-            const data = await adminAPI.getUsers();
-            setUsers(data);
+            const [usersData, disputesData] = await Promise.all([
+                adminAPI.getUsers(),
+                adminAPI.getDisputedTransfers()
+            ]);
+            setUsers(usersData);
+            setDisputes(disputesData);
         } catch (err) {
             toast.error('Failed to load users');
         } finally {
@@ -69,7 +74,7 @@ export const AdminDashboard = () => {
         }
     };
 
-    useEffect(() => { fetchUsers(); }, []);
+    useEffect(() => { fetchData(); }, []);
 
     const handleRoleSelect = (userId, newRole, userName) => {
         setPendingChange({ userId, newRole, userName });
@@ -80,11 +85,21 @@ export const AdminDashboard = () => {
         try {
             await adminAPI.updateUserRole(pendingChange.userId, pendingChange.newRole);
             toast.success(`Updated ${pendingChange.userName}'s role to ${pendingChange.newRole}`);
-            await fetchUsers();
+            await fetchData();
         } catch (err) {
             toast.error(err.response?.data?.detail || 'Failed to update role');
         } finally {
             setPendingChange(null);
+        }
+    };
+
+    const resolveDispute = async (landId, resolution) => {
+        try {
+            await adminAPI.resolveTransferDispute(landId, resolution);
+            toast.success(resolution === 'force_transfer' ? 'Transfer forced successfully' : 'Transfer cancelled successfully');
+            fetchData();
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to resolve dispute');
         }
     };
 
@@ -113,7 +128,7 @@ export const AdminDashboard = () => {
                         </div>
                     </div>
                     <div className="flex gap-3">
-                        <Button variant="outline" onClick={fetchUsers} disabled={loading}>
+                        <Button variant="outline" onClick={fetchData} disabled={loading}>
                             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                             Refresh
                         </Button>
@@ -209,6 +224,49 @@ export const AdminDashboard = () => {
                         )}
                     </CardContent>
                 </Card>
+
+                {/* Disputed Transfers */}
+                {disputes.length > 0 && (
+                    <Card className="border-destructive/50 shadow-[0_0_15px_hsl(var(--destructive)/0.1)]">
+                        <CardHeader className="bg-destructive/5 border-b border-destructive/20">
+                            <CardTitle className="flex items-center gap-2 text-destructive">
+                                <AlertTriangle className="w-5 h-5" />
+                                Disputed Escrow Transfers
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <div className="space-y-4">
+                                {disputes.map((d) => (
+                                    <div key={d.id} className="p-4 border border-border/50 rounded-lg bg-card/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h4 className="font-semibold">{d.title || 'Untitled'}</h4>
+                                                <Badge variant="outline" className="font-mono text-xs">{d.id.substring(0,8).toUpperCase()}</Badge>
+                                            </div>
+                                            <p className="text-sm text-muted-foreground mb-2">
+                                                <span className="font-medium text-foreground">Dispute Reason:</span> {d.transfer_dispute_reason || "Unknown"}
+                                            </p>
+                                            <div className="text-xs text-muted-foreground font-mono">
+                                                Owner ID: {d.owner_id} <br/>
+                                                Pending Buyer: {d.pending_buyer_id}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-2 min-w-[200px]">
+                                            <Button variant="success" size="sm" className="w-full bg-success text-white hover:bg-success/90" onClick={() => resolveDispute(d.id, 'force_transfer')}>
+                                                <Check className="w-4 h-4 mr-2" />
+                                                Force Transfer
+                                            </Button>
+                                            <Button variant="destructive" size="sm" className="w-full" onClick={() => resolveDispute(d.id, 'cancel_transfer')}>
+                                                <X className="w-4 h-4 mr-2" />
+                                                Cancel Transfer
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
 
             {/* Confirmation Dialog */}

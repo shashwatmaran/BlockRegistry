@@ -21,6 +21,14 @@ contract LandRegistryTest is Test {
     uint256 constant LAND_AREA = 1000; // 1000 sq meters
     uint256 constant LAND_PRICE = 100 ether;
     string constant LOCATION = "40.7128,-74.0060";
+    string constant PROP_ID_1 = "1234567890ABCD";
+    string constant PROP_ID_2 = "2234567890ABCD";
+    string constant PROP_ID_3 = "3234567890ABCD";
+    string constant PROP_ID_4 = "4234567890ABCD";
+    string constant PROP_ID_5 = "5234567890ABCD";
+    string constant PROP_ID_6 = "6234567890ABCD";
+    string constant PROP_ID_7 = "7234567890ABCD";
+    string constant PROP_ID_8 = "8234567890ABCD";
     
     function setUp() public {
         // Deploy contract as owner
@@ -48,6 +56,7 @@ contract LandRegistryTest is Test {
     function testRegisterLand() public {
         vm.prank(user1);
         uint256 tokenId = landRegistry.registerLand(
+            PROP_ID_1,
             IPFS_HASH,
             LAND_AREA,
             LAND_PRICE,
@@ -74,8 +83,8 @@ contract LandRegistryTest is Test {
     
     function testRegisterMultipleLands() public {
         vm.startPrank(user1);
-        uint256 tokenId1 = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
-        uint256 tokenId2 = landRegistry.registerLand(IPFS_HASH, LAND_AREA * 2, LAND_PRICE * 2, LOCATION);
+        uint256 tokenId1 = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId2 = landRegistry.registerLand(PROP_ID_2, IPFS_HASH, LAND_AREA * 2, LAND_PRICE * 2, LOCATION);
         vm.stopPrank();
         
         assertEq(tokenId1, 0, "First token ID should be 0");
@@ -86,19 +95,19 @@ contract LandRegistryTest is Test {
     function testRegisterLandRevertsWithEmptyIPFS() public {
         vm.prank(user1);
         vm.expectRevert("IPFS hash cannot be empty");
-        landRegistry.registerLand("", LAND_AREA, LAND_PRICE, LOCATION);
+        landRegistry.registerLand(PROP_ID_1, "", LAND_AREA, LAND_PRICE, LOCATION);
     }
     
     function testRegisterLandRevertsWithZeroArea() public {
         vm.prank(user1);
         vm.expectRevert("Area must be greater than 0");
-        landRegistry.registerLand(IPFS_HASH, 0, LAND_PRICE, LOCATION);
+        landRegistry.registerLand(PROP_ID_1, IPFS_HASH, 0, LAND_PRICE, LOCATION);
     }
     
     function testGetOwnerLands() public {
         vm.startPrank(user1);
-        landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
-        landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        landRegistry.registerLand(PROP_ID_2, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         vm.stopPrank();
         
         uint256[] memory lands = landRegistry.getOwnerLands(user1);
@@ -112,7 +121,7 @@ contract LandRegistryTest is Test {
     function testVerifyLand() public {
         // Register land
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         // 1st Verification
         vm.prank(adminRelayer);
@@ -146,7 +155,7 @@ contract LandRegistryTest is Test {
     
     function testVerifyLandRevertsForNonVerifier() public {
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         vm.prank(user2); // Not admin Relayer!
         vm.expectRevert();
@@ -161,7 +170,7 @@ contract LandRegistryTest is Test {
     
     function testRejectLand() public {
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         vm.prank(adminRelayer);
         landRegistry.rejectLand(tokenId, "Invalid documents");
@@ -175,7 +184,7 @@ contract LandRegistryTest is Test {
     
     function testCannotVerifyAlreadyVerifiedLand() public {
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         _fullyVerify(tokenId);
         
@@ -186,7 +195,7 @@ contract LandRegistryTest is Test {
     
     function testCannotVerifyTwice() public {
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         vm.prank(adminRelayer);
         landRegistry.verifyLand(tokenId, verifier1);
@@ -201,7 +210,7 @@ contract LandRegistryTest is Test {
     function testTransferVerifiedLand() public {
         // Register and fully verify land
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         _fullyVerify(tokenId);
         
@@ -223,7 +232,7 @@ contract LandRegistryTest is Test {
     
     function testTransferRevertsForUnverifiedLand() public {
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         vm.prank(user1);
         vm.expectRevert("Only verified lands can be transferred");
@@ -232,7 +241,7 @@ contract LandRegistryTest is Test {
     
     function testTransferRevertsForNonOwner() public {
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         _fullyVerify(tokenId);
         
@@ -245,7 +254,7 @@ contract LandRegistryTest is Test {
     
     function testUpdateMetadata() public {
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         string memory newIPFS = "QmNewHash987654";
         vm.prank(user1);
@@ -257,7 +266,7 @@ contract LandRegistryTest is Test {
     
     function testUpdateMetadataRevertsForNonOwner() public {
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         vm.prank(user2);
         vm.expectRevert("You are not the owner");
@@ -266,7 +275,7 @@ contract LandRegistryTest is Test {
     
     function testUpdateMetadataRevertsWithEmptyHash() public {
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         vm.prank(user1);
         vm.expectRevert("IPFS hash cannot be empty");
@@ -278,13 +287,13 @@ contract LandRegistryTest is Test {
     function testLandRegisteredEvent() public {
         vm.prank(user1);
         vm.expectEmit(true, true, false, true);
-        emit LandRegistry.LandRegistered(0, user1, IPFS_HASH, LAND_AREA, LAND_PRICE);
-        landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        emit LandRegistry.LandRegistered(0, user1, PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE);
+        landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
     }
     
     function testLandVerifiedEvent() public {
         vm.prank(user1);
-        uint256 tokenId = landRegistry.registerLand(IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
+        uint256 tokenId = landRegistry.registerLand(PROP_ID_1, IPFS_HASH, LAND_AREA, LAND_PRICE, LOCATION);
         
         vm.prank(adminRelayer);
         landRegistry.verifyLand(tokenId, verifier1);

@@ -127,12 +127,16 @@ async def get_recent_transactions(db=Depends(get_database)) -> List[Dict[str, An
 @router.get("/properties")
 async def get_explorer_properties(db=Depends(get_database)) -> List[Dict[str, Any]]:
     """
-    Return latest 20 land records (all statuses) for the Properties tab.
+    Return land records (market feed) where is_for_sale == True and verified.
     """
     collection = db[LandModel.collection_name]
-
+    from app.models.user import UserModel
+    
     cursor = collection.find(
-        {},
+        {
+            "blockchain_status": "verified",
+            "is_for_sale": True
+        },
         {
             "_id": 1,
             "title": 1,
@@ -143,12 +147,18 @@ async def get_explorer_properties(db=Depends(get_database)) -> List[Dict[str, An
             "status": 1,
             "token_id": 1,
             "blockchain_tx_hash": 1,
+            "owner_id": 1,
             "created_at": 1,
             "updated_at": 1,
         }
-    ).sort("updated_at", -1).limit(20)
+    ).sort("updated_at", -1).limit(50)
 
-    lands = await cursor.to_list(length=20)
+    lands = await cursor.to_list(length=50)
+    
+    # Pre-fetch users to get emails
+    owner_ids = [l["owner_id"] for l in lands if "owner_id" in l]
+    users_cursor = db[UserModel.collection_name].find({"_id": {"$in": owner_ids}}, {"email": 1, "full_name": 1})
+    users_map = {str(u["_id"]): u for u in await users_cursor.to_list(length=100)}
 
     result = []
     for land in lands:
@@ -175,9 +185,15 @@ async def get_explorer_properties(db=Depends(get_database)) -> List[Dict[str, An
 
         blockchain_status = land.get("blockchain_status", "not_minted")
         is_verified = blockchain_status == "verified"
+        
+        owner_str = str(land.get("owner_id"))
+        owner_user = users_map.get(owner_str, {})
 
         result.append({
             "id": str(land["_id"]),
+            "owner_id": owner_str,
+            "owner_email": owner_user.get("email", "Unknown"),
+            "owner_name": owner_user.get("full_name", "Unknown"),
             "prop_id": f"PROP-{str(land['_id'])[:8].upper()}",
             "title": land.get("title", "Untitled Property"),
             "address": address,

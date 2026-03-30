@@ -15,6 +15,23 @@ export const PropertyDetails = ({ formData, handleInputChange }) => {
     return (
         <div className="space-y-6">
             <div className="space-y-2">
+                <Label htmlFor="propertyId">Property ID (PID) *</Label>
+                <div className="relative">
+                    <Input
+                        id="propertyId"
+                        placeholder="e.g., AB123456789012"
+                        value={formData.propertyId}
+                        onChange={(e) => handleInputChange('propertyId', e.target.value.toUpperCase())}
+                        maxLength={14}
+                        required
+                    />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                    Exactly 14 alphanumeric characters. Example: MH123456789XYZ
+                </p>
+            </div>
+
+            <div className="space-y-2">
                 <Label htmlFor="title">Property Title *</Label>
                 <Input
                     id="title"

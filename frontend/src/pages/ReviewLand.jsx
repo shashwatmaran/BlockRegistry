@@ -24,10 +24,14 @@ export const ReviewLand = () => {
     const [showRejectDialog, setShowRejectDialog] = useState(false);
     const [showVerifyDialog, setShowVerifyDialog] = useState(false);
     const [rejectionReason, setRejectionReason] = useState('');
+    const [existingLands, setExistingLands] = useState([]);
 
     const { user } = useAuth();
-    const currentUserAddress = user?.wallet_address || (user?.id ? `0x${user.id.padStart(40, '0')}` : null);
-    const hasAlreadyVerified = land?.verified_by_list?.includes(currentUserAddress);
+    const userId = user?.id || user?._id;
+    const currentUserAddress = user?.wallet_address ? user.wallet_address.toLowerCase() : (userId ? `0x${userId.padStart(40, '0')}`.toLowerCase() : null);
+    const hasAlreadyVerified = land?.verified_by_list?.some(
+        addr => addr.toLowerCase() === currentUserAddress
+    ) || false;
 
     const fetchLandDetails = useCallback(async () => {
         try {
@@ -36,6 +40,15 @@ export const ReviewLand = () => {
             // Fetch land details from backend
             const landData = await landAPI.getLandById(landId);
             setLand(landData);
+
+            // Fetch existing registered lands for context map
+            try {
+                const verifiedLandsData = await verifierAPI.getVerifiedLands();
+                const filtered = verifiedLandsData.filter(l => l.id !== landId);
+                setExistingLands(filtered);
+            } catch (err) {
+                console.warn('Could not fetch verified lands for map overlay', err);
+            }
         } catch (error) {
             console.error('Error fetching land details:', error);
             toast.error('Failed to fetch land details from backend');
@@ -316,6 +329,7 @@ export const ReviewLand = () => {
                                         address={land.location?.address || land.location}
                                         zoom={14}
                                         className="h-72 w-full"
+                                        existingLands={existingLands}
                                     />
                                     {land.location?.lat && land.location?.lng && (
                                         <p className="text-xs text-muted-foreground mt-2 font-mono">

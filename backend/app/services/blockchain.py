@@ -237,6 +237,7 @@ class BlockchainService:
     
     def register_land(
         self,
+        property_id: str,
         ipfs_hash: str,
         area: int,
         price: int,
@@ -259,7 +260,7 @@ class BlockchainService:
         # Estimate gas dynamically — cold SSTORE slots on first mint cost more than warm
         try:
             estimated_gas = self.land_registry.functions.registerLand(
-                ipfs_hash, area, price, location
+                property_id, ipfs_hash, area, price, location
             ).estimate_gas({"from": admin_account.address})
             gas_limit = int(estimated_gas * 1.5)  # 50% safety buffer
             print(f"[Mint] Estimated gas: {estimated_gas}, using limit: {gas_limit}")
@@ -273,6 +274,7 @@ class BlockchainService:
 
         try:
             transaction = self.land_registry.functions.registerLand(
+                property_id,
                 ipfs_hash,
                 area,
                 price,

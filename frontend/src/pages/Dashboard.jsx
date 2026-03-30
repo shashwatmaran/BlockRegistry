@@ -23,11 +23,17 @@ import {
   Link,
   ExternalLink,
   Hash,
+  Trash2,
   User,
   ShieldAlert,
   ShieldOff,
+  Send,
+  Mail,
+  Tag,
+  Ban,
+  ThumbsUp,
 } from 'lucide-react';
-import { landAPI } from '@/services/api';
+import { landAPI, userAPI } from '@/services/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
@@ -44,21 +50,46 @@ export const Dashboard = () => {
   const [verifyResult, setVerifyResult] = useState(null);
   const [verifyError, setVerifyError] = useState(null);
 
-  // Fetch lands on mount
+  // Escrow Transfers State
+  const [transfers, setTransfers] = useState({ incoming: [], outgoing: [] });
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [transferLandId, setTransferLandId] = useState('');
+  const [transferEmail, setTransferEmail] = useState('');
+  const [transferring, setTransferring] = useState(false);
+  const [verifiedUser, setVerifiedUser] = useState(null);
+  const [verifyingUser, setVerifyingUser] = useState(false);
+
+  const handleDeleteRejected = async (landId) => {
+    if (!window.confirm("Are you sure you want to delete this rejected application? You can register it again later.")) return;
+    try {
+      await landAPI.deleteLand(landId);
+      toast.success('Rejected application deleted successfully');
+      fetchDashboardData();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to delete application');
+    }
+  };
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const [landsData, transfersData] = await Promise.all([
+        landAPI.getMyLands(),
+        landAPI.getMyTransfers()
+      ]);
+      setLands(landsData);
+      setTransfers(transfersData);
+    } catch (err) {
+      console.error('Failed to fetch dashboard data:', err);
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch data on mount
   useEffect(() => {
-    const fetchLands = async () => {
-      try {
-        setLoading(true);
-        const data = await landAPI.getMyLands();
-        setLands(data);
-      } catch (err) {
-        console.error('Failed to fetch lands:', err);
-        toast.error('Failed to load your properties');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLands();
+    fetchDashboardData();
   }, []);
 
   const dashboardStats = [
@@ -106,12 +137,17 @@ export const Dashboard = () => {
 
   const isVerified = (status) => status === 'approved' || status === 'verified';
 
-  const getStatusBadge = (status) =>
-    isVerified(status)
-      ? 'bg-success/10 text-success border-success/30'
-      : 'bg-warning/10 text-warning border-warning/30';
+  const getStatusBadge = (status) => {
+    if (isVerified(status)) return 'bg-success/10 text-success border-success/30';
+    if (status === 'rejected') return 'bg-destructive/10 text-destructive border-destructive/30';
+    return 'bg-warning/10 text-warning border-warning/30';
+  };
 
-  const getStatusLabel = (status) => (isVerified(status) ? 'Verified' : 'Pending');
+  const getStatusLabel = (status) => {
+    if (isVerified(status)) return 'Verified';
+    if (status === 'rejected') return 'Rejected';
+    return 'Pending';
+  };
 
   // ── Verify Ownership handlers ────────────────────────────────────────────
   const openVerifyModal = () => {
@@ -138,6 +174,67 @@ export const Dashboard = () => {
     }
   };
 
+  // ── Escrow & Marketplace Handlers ────────────────────────────────────────
+
+  const handleToggleForSale = async (landId, currentStatus) => {
+    try {
+      await landAPI.toggleForSale(landId, !currentStatus);
+      toast.success(!currentStatus ? 'Property active on Marketplace' : 'Property unlisted');
+      fetchDashboardData();
+    } catch (err) { toast.error(err?.response?.data?.detail || 'Failed to update sale status'); }
+  };
+
+  const handleMarkPaid = async (landId) => {
+    try {
+      await landAPI.markTransferPaid(landId);
+      toast.success('Transfer marked as paid! Waiting for seller release.');
+      fetchDashboardData();
+    } catch (err) { toast.error(err?.response?.data?.detail || 'Failed to mark as paid'); }
+  };
+
+  const handleRelease = async (landId) => {
+    try {
+      await landAPI.releaseTransfer(landId);
+      toast.success('Property successfully transferred to buyer!');
+      fetchDashboardData();
+    } catch (err) { toast.error(err?.response?.data?.detail || 'Failed to release property'); }
+  };
+
+  const handleDispute = async (landId) => {
+    try {
+      await landAPI.disputeTransfer(landId, "Buyer disputes that seller has not released property after payment.");
+      toast.success('Dispute raised successfully. Admin will intervene.');
+      fetchDashboardData();
+    } catch (err) { toast.error(err?.response?.data?.detail || 'Failed to raise dispute'); }
+  };
+
+  const executeTransfer = async () => {
+    if (!transferEmail) return toast.error('Please enter buyer email');
+    try {
+      setTransferring(true);
+      await landAPI.initiateTransfer(transferLandId, transferEmail);
+      toast.success('Transfer initiated. Property is locked until buyer pays.');
+      setTransferModalOpen(false);
+      setTransferEmail('');
+      fetchDashboardData();
+    } catch (err) { toast.error(err?.response?.data?.detail || 'Failed to initiate transfer'); }
+    finally { setTransferring(false); }
+  };
+
+  const handleVerifyEmail = async () => {
+    if (!transferEmail) return;
+    setVerifyingUser(true);
+    setVerifiedUser(null);
+    try {
+      const user = await userAPI.lookupUserByEmail(transferEmail);
+      setVerifiedUser(user);
+    } catch (err) {
+      toast.error('User not found with that email address');
+    } finally {
+      setVerifyingUser(false);
+    }
+  };
+
   // ── VerifyOwnershipModal ─────────────────────────────────────────────────
   const blockchainStatusConfig = {
     verified: { label: 'Verified', icon: ShieldCheck, cls: 'bg-success/10 text-success border-success/30' },
@@ -146,7 +243,7 @@ export const Dashboard = () => {
     rejected: { label: 'Rejected', icon: AlertCircle, cls: 'bg-destructive/10 text-destructive border-destructive/30' },
   };
 
-  const VerifyOwnershipModal = () => {
+  const renderVerifyOwnershipModal = () => {
     if (!verifyModalOpen) return null;
     const cfg = blockchainStatusConfig[verifyResult?.blockchain_status] || blockchainStatusConfig.not_minted;
     const StatusIcon = cfg.icon;
@@ -334,8 +431,58 @@ export const Dashboard = () => {
 
 
 
-  const PropertyCard = ({ land, onClick }) => {
+  // ── InitiateTransferModal ────────────────────────────────────────────────
+  const renderInitiateTransferModal = () => {
+    if (!transferModalOpen) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setTransferModalOpen(false)} />
+        <div className="relative z-10 w-full max-w-sm rounded-xl border border-border/60 bg-card p-6 shadow-2xl">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold font-['Space_Grotesk']">Initiate Transfer</h2>
+            <button onClick={() => setTransferModalOpen(false)}><X className="h-4 w-4" /></button>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            Enter the buyer's email address and verify it. Once initiated, the property will be locked for them to manually pay you offline.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Buyer Email</label>
+              <div className="flex gap-2 mt-1">
+                <input
+                  type="email"
+                  placeholder="buyer@example.com"
+                  value={transferEmail}
+                  onChange={(e) => {
+                    setTransferEmail(e.target.value);
+                    setVerifiedUser(null);
+                  }}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <Button variant="outline" onClick={handleVerifyEmail} disabled={!transferEmail || verifyingUser}>
+                  {verifyingUser ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify"}
+                </Button>
+              </div>
+              {verifiedUser && (
+                <div className="text-xs text-success flex items-center mt-2">
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  Verified User: {verifiedUser.full_name}
+                </div>
+              )}
+            </div>
+            <Button variant="gradient" className="w-full" disabled={transferring || !verifiedUser} onClick={executeTransfer}>
+              {transferring ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+              Send Transfer Request
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const PropertyCard = ({ land, onClick, children }) => {
     const verified = isVerified(land.status);
+    const rejected = land.status === 'rejected';
     const property = {
       id: land.id.substring(0, 12).toUpperCase(),
       address: land.location?.address || 'Address not available',
@@ -348,7 +495,9 @@ export const Dashboard = () => {
       <div
         className={`p-4 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-all duration-300 cursor-pointer border-l-4 ${verified
           ? 'border-border/50 border-l-success hover:border-l-success'
-          : 'border-border/50 border-l-warning hover:border-l-warning'
+          : rejected
+            ? 'border-border/50 border-l-destructive hover:border-l-destructive'
+            : 'border-border/50 border-l-warning hover:border-l-warning'
           } ${onClick ? 'hover:border-primary/50' : ''}`}
         onClick={onClick}
       >
@@ -359,6 +508,8 @@ export const Dashboard = () => {
               <Badge variant="outline" className={getStatusBadge(property.status)}>
                 {verified ? (
                   <CheckCircle className="h-3 w-3 mr-1" />
+                ) : rejected ? (
+                  <X className="h-3 w-3 mr-1" />
                 ) : (
                   <Clock className="h-3 w-3 mr-1" />
                 )}
@@ -378,12 +529,22 @@ export const Dashboard = () => {
             <Calendar className="h-3 w-3" />
             <span>{property.date}</span>
           </div>
-          {!verified && (
+          {!verified && !rejected && (
             <span className="text-warning text-xs font-medium flex items-center gap-1">
               <AlertCircle className="h-3 w-3" /> Awaiting approval
             </span>
           )}
+          {rejected && (
+            <span className="text-destructive text-xs font-medium flex items-center gap-1">
+              <X className="h-3 w-3" /> Rejected
+            </span>
+          )}
         </div>
+        {children && (
+          <div className="mt-4 pt-4 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
+            {children}
+          </div>
+        )}
       </div>
     );
   };
@@ -407,7 +568,8 @@ export const Dashboard = () => {
 
   return (
     <div className="min-h-screen py-8">
-      <VerifyOwnershipModal />
+      {renderVerifyOwnershipModal()}
+      {renderInitiateTransferModal()}
       <div className="container mx-auto px-4 space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -474,10 +636,13 @@ export const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="all" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3 mb-4">
+                  <TabsList className="grid w-full grid-cols-6 mb-4">
                     <TabsTrigger value="all">All</TabsTrigger>
                     <TabsTrigger value="verified">Verified</TabsTrigger>
                     <TabsTrigger value="pending">Pending</TabsTrigger>
+                    <TabsTrigger value="rejected">Rejected</TabsTrigger>
+                    <TabsTrigger value="incoming">Incoming</TabsTrigger>
+                    <TabsTrigger value="outgoing">Outgoing</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="all" className="space-y-4">
@@ -506,17 +671,151 @@ export const Dashboard = () => {
                     ) : (
                       lands
                         .filter((p) => isVerified(p.status))
-                        .map((land) => <PropertyCard key={land.id} land={land} />)
+                        .map((land) => (
+                          <PropertyCard key={land.id} land={land}>
+                            <div className="flex gap-2">
+                              {land.transfer_status === 'none' && (
+                                <>
+                                  <Button 
+                                    variant={land.is_for_sale ? "outline" : "default"} 
+                                    size="sm" 
+                                    className="flex-1"
+                                    onClick={() => handleToggleForSale(land.id, land.is_for_sale)}
+                                  >
+                                    <Tag className="h-4 w-4 mr-2" />
+                                    {land.is_for_sale ? "Unlist from Marketplace" : "List on Marketplace"}
+                                  </Button>
+                                  <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    className="flex-1"
+                                    onClick={() => { setTransferLandId(land.id); setTransferModalOpen(true); }}
+                                  >
+                                    <Send className="h-4 w-4 mr-2" />
+                                    Transfer Property
+                                  </Button>
+                                </>
+                              )}
+                              {land.transfer_status !== 'none' && (
+                                <p className="text-sm font-medium text-warning w-full text-center">
+                                  Property is currently locked in an escrow transfer.
+                                </p>
+                              )}
+                            </div>
+                          </PropertyCard>
+                        ))
                     )}
                   </TabsContent>
 
                   <TabsContent value="pending" className="space-y-4">
-                    {lands.filter((p) => !isVerified(p.status)).length === 0 ? (
+                    {lands.filter((p) => !isVerified(p.status) && p.status !== 'rejected').length === 0 ? (
                       <p className="text-center text-muted-foreground py-8">No pending properties.</p>
                     ) : (
                       lands
-                        .filter((p) => !isVerified(p.status))
+                        .filter((p) => !isVerified(p.status) && p.status !== 'rejected')
                         .map((land) => <PropertyCard key={land.id} land={land} />)
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="rejected" className="space-y-4">
+                    {lands.filter((p) => p.status === 'rejected').length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">No rejected properties.</p>
+                    ) : (
+                      lands
+                        .filter((p) => p.status === 'rejected')
+                        .map((land) => (
+                          <PropertyCard key={land.id} land={land}>
+                            {land.rejection_reason && (
+                              <div className="bg-destructive/10 rounded-md p-3 mb-3 border border-destructive/20 text-destructive text-sm flex items-start">
+                                <AlertCircle className="w-4 h-4 mr-2 shrink-0 mt-0.5" />
+                                <div>
+                                  <div className="font-semibold mb-1">Rejection Reason:</div>
+                                  <div>{land.rejection_reason}</div>
+                                </div>
+                              </div>
+                            )}
+                            <Button 
+                              variant="destructive" 
+                              size="sm" 
+                              className="w-full mt-2" 
+                              onClick={(e) => { e.stopPropagation(); handleDeleteRejected(land.id); }}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete Application
+                            </Button>
+                          </PropertyCard>
+                        ))
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="incoming" className="space-y-4">
+                    {transfers.incoming.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">No incoming transfer requests.</p>
+                    ) : (
+                      transfers.incoming.map((land) => (
+                        <PropertyCard key={land.id} land={land}>
+                          <div className="bg-primary/5 rounded-md p-3 mb-3 border border-primary/20">
+                            <h4 className="text-sm font-semibold mb-1">Transfer Request Received</h4>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              The seller has locked this property for you. Please proceed to pay them manually, then click "Mark as Paid".
+                            </p>
+                            <div className="flex gap-2">
+                              {land.transfer_status === 'pending' && (
+                                <Button variant="gradient" size="sm" className="w-full" onClick={() => handleMarkPaid(land.id)}>
+                                  <ThumbsUp className="h-4 w-4 mr-2" />
+                                  I Have Paid
+                                </Button>
+                              )}
+                              {land.transfer_status === 'paid' && (
+                                <Button variant="outline" size="sm" className="w-full" disabled>
+                                  <Clock className="h-4 w-4 mr-2" /> Waiting for Seller Release...
+                                </Button>
+                              )}
+                              {land.transfer_status === 'paid' && (
+                                <Button variant="destructive" size="sm" onClick={() => handleDispute(land.id)} title="Seller didn't release?">
+                                  <Ban className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {land.transfer_status === 'disputed' && (
+                                <div className="text-destructive text-sm font-semibold text-center w-full">In Dispute - Admin will mediate</div>
+                              )}
+                            </div>
+                          </div>
+                        </PropertyCard>
+                      ))
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="outgoing" className="space-y-4">
+                    {transfers.outgoing.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">No outgoing transfer requests.</p>
+                    ) : (
+                      transfers.outgoing.map((land) => (
+                        <PropertyCard key={land.id} land={land}>
+                          <div className="bg-secondary/5 rounded-md p-3 mb-3 border border-secondary/20">
+                            <h4 className="text-sm font-semibold mb-1">Outgoing Escrow Transfer</h4>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              This property is locked for the buyer. After you receive full offline payment, release it to them.
+                            </p>
+                            <div className="flex gap-2">
+                              {land.transfer_status === 'pending' && (
+                                <Button variant="outline" size="sm" className="w-full" disabled>
+                                  <Clock className="h-4 w-4 mr-2" /> Waiting for Buyer Payment...
+                                </Button>
+                              )}
+                              {land.transfer_status === 'paid' && (
+                                <Button variant="success" size="sm" className="w-full bg-success hover:bg-success/90 text-white" onClick={() => handleRelease(land.id)}>
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Verify Payment & Release Property
+                                </Button>
+                              )}
+                              {land.transfer_status === 'disputed' && (
+                                <div className="text-destructive text-sm font-semibold text-center w-full">In Dispute - Admin will mediate</div>
+                              )}
+                            </div>
+                          </div>
+                        </PropertyCard>
+                      ))
                     )}
                   </TabsContent>
                 </Tabs>

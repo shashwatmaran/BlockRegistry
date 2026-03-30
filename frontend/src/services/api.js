@@ -77,6 +77,7 @@ export const landAPI = {
         const formData = new FormData();
 
         // Add form fields
+        formData.append('property_id', landData.property_id);
         formData.append('title', landData.title);
         formData.append('description', landData.description);
         formData.append('area', parseFloat(landData.area));
@@ -111,9 +112,52 @@ export const landAPI = {
         return response.data;
     },
 
+    // Delete a rejected land
+    deleteLand: async (landId) => {
+        const response = await api.delete(`/land/${landId}`);
+        return response.data;
+    },
+
     // Verify ownership of a land parcel (reads both DB + on-chain data)
     verifyOwnership: async (landId) => {
         const response = await api.get(`/land/verify-ownership/${landId}`);
+        return response.data;
+    },
+
+    // Toggle for-sale status
+    toggleForSale: async (landId, isForSale) => {
+        const response = await api.patch(`/land/${landId}/for-sale`, { is_for_sale: isForSale });
+        return response.data;
+    },
+
+    // Escrow Transfer Endpoints
+    initiateTransfer: async (landId, buyerEmail) => {
+        const response = await api.post(`/land/${landId}/transfer/initiate`, { buyer_email: buyerEmail });
+        return response.data;
+    },
+
+    markTransferPaid: async (landId) => {
+        const response = await api.post(`/land/${landId}/transfer/mark-paid`);
+        return response.data;
+    },
+
+    releaseTransfer: async (landId) => {
+        const response = await api.post(`/land/${landId}/transfer/release`);
+        return response.data;
+    },
+
+    cancelTransfer: async (landId) => {
+        const response = await api.post(`/land/${landId}/transfer/cancel`);
+        return response.data;
+    },
+
+    disputeTransfer: async (landId, reason) => {
+        const response = await api.post(`/land/${landId}/transfer/dispute`, { reason });
+        return response.data;
+    },
+
+    getMyTransfers: async () => {
+        const response = await api.get('/land/transfers/my');
         return response.data;
     },
 };
@@ -138,6 +182,12 @@ export const userAPI = {
     // Get wallet linking status
     getWalletStatus: async () => {
         const response = await api.get('/users/wallet-status');
+        return response.data;
+    },
+
+    // Lookup user by email
+    lookupUserByEmail: async (email) => {
+        const response = await api.get(`/users/lookup?email=${encodeURIComponent(email)}`);
         return response.data;
     },
 };
@@ -202,6 +252,17 @@ export const adminAPI = {
         const response = await api.patch(`/admin/users/${userId}/wallet`, {
             wallet_address: walletAddress || null,
         });
+        return response.data;
+    },
+
+    // Resolve an escrow transfer dispute
+    resolveTransferDispute: async (landId, resolution) => {
+        const response = await api.post(`/land/${landId}/transfer/resolve-dispute`, { resolution });
+        return response.data;
+    },
+
+    getDisputedTransfers: async () => {
+        const response = await api.get('/admin/transfers/disputed');
         return response.data;
     },
 };

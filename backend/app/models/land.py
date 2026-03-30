@@ -13,6 +13,7 @@ class LandModel:
     structure = {
         "_id": "ObjectId",
         "owner_id": "ObjectId", # Reference to User
+        "property_id": "str",
         "title": "str",
         "description": "str",
         "area": "float", # in sqft or sq m
@@ -49,5 +50,6 @@ class LandModel:
     def create_indexes():
         return [
             {"keys": [("owner_id", 1)]},
-            {"keys": [("status", 1)]}
+            {"keys": [("status", 1)]},
+            {"keys": [("property_id", 1)], "unique": True}
         ]

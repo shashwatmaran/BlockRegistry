@@ -19,7 +19,7 @@ L.Icon.Default.mergeOptions({
  *   zoom      - initial zoom level (default 14)
  *   className - optional height/width classes (default: h-64 w-full)
  */
-export const MapView = ({ lat, lng, address, zoom = 14, className = 'h-64 w-full' }) => {
+export const MapView = ({ lat, lng, address, zoom = 14, className = 'h-64 w-full', existingLands = [] }) => {
     if (!lat || !lng) {
         return (
             <div className={`${className} rounded-lg border border-border bg-muted flex items-center justify-center`}>
@@ -42,9 +42,10 @@ export const MapView = ({ lat, lng, address, zoom = 14, className = 'h-64 w-full
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                <Marker position={[lat, lng]}>
+                <Marker position={[lat, lng]} zIndexOffset={1000}>
                     {address && (
                         <Popup maxWidth={250}>
+                            <p className="text-xs font-bold text-primary mb-1">Pending Registration</p>
                             <p className="text-xs">{address}</p>
                             <p className="text-xs text-gray-500 mt-1">
                                 {lat.toFixed(6)}, {lng.toFixed(6)}
@@ -52,6 +53,31 @@ export const MapView = ({ lat, lng, address, zoom = 14, className = 'h-64 w-full
                         </Popup>
                     )}
                 </Marker>
+                {existingLands.map((eland) => (
+                    eland.location && eland.location.lat && eland.location.lng ? (
+                        <Marker 
+                            key={eland.id} 
+                            position={[eland.location.lat, eland.location.lng]}
+                            opacity={0.6}
+                        >
+                            <Popup maxWidth={250}>
+                                <div className="p-1">
+                                    <p className="text-xs font-bold text-destructive mb-1">Existing Verified Land</p>
+                                    <p className="text-sm font-medium">{eland.title}</p>
+                                    <p className="text-xs font-mono mt-1 w-full truncate border-t pt-1">PID: {eland.property_id || 'N/A'}</p>
+                                    <a 
+                                        href={`/explorer`} 
+                                        className="text-primary hover:underline mt-2 block text-xs"
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                    >
+                                        View details ↗
+                                    </a>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    ) : null
+                ))}
             </MapContainer>
         </div>
     );

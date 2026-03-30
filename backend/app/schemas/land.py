@@ -13,6 +13,7 @@ class DocumentSchema(BaseModel):
     type: str
 
 class LandBase(BaseModel):
+    property_id: str
     title: str
     description: str
     area: float
@@ -46,6 +47,9 @@ class LandResponse(LandBase):
     rejection_reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    # Soft Escrow / Transfer fields
+    transfer_status: Optional[str] = "none" # none, pending, paid, disputed
+    pending_buyer_id: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -68,3 +72,16 @@ class OwnershipVerificationResponse(BaseModel):
     tx_hash: Optional[str] = None
     etherscan_url: Optional[str] = None
     is_owned_by_current_user: bool = True
+
+class ToggleForSaleRequest(BaseModel):
+    is_for_sale: bool
+
+class InitiateTransferRequest(BaseModel):
+    buyer_email: str
+
+class DisputeTransferRequest(BaseModel):
+    reason: str
+
+class ResolveDisputeRequest(BaseModel):
+    resolution: str # 'force_transfer' or 'cancel_transfer'
+

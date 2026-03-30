@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from typing import List, Optional
 import json
+import re
 from datetime import datetime
 from bson import ObjectId
 
@@ -8,7 +9,11 @@ from app.api.deps import get_current_user, get_current_verifier_or_admin
 from app.db.mongodb import get_database
 
 from app.models.land import LandModel
-from app.schemas.land import LandCreate, LandResponse, LocationSchema, DocumentSchema, OwnershipVerificationResponse
+from app.models.user import UserModel
+from app.schemas.land import (
+    LandCreate, LandResponse, LocationSchema, DocumentSchema, OwnershipVerificationResponse,
+    ToggleForSaleRequest, InitiateTransferRequest, DisputeTransferRequest, ResolveDisputeRequest
+)
 from app.schemas.user import UserInDB
 from app.schemas.verifier import (
     VerifyLandRequest,
@@ -24,6 +29,7 @@ router = APIRouter()
 
 @router.post("/register", response_model=LandResponse)
 async def register_land(
+    property_id: str = Form(...),
     title: str = Form(...),
     description: str = Form(...),
     area: float = Form(...),
@@ -41,6 +47,15 @@ async def register_land(
     2. Stores land details in MongoDB with 'pending' status.
     """
     
+    # Validate Property ID (14 alphanumeric characters)
+    if not re.match(r"^[A-Za-z0-9]{14}$", property_id):
+        raise HTTPException(status_code=400, detail="Property ID must be exactly 14 alphanumeric characters")
+        
+    # Check if property ID already exists
+    existing = await db[LandModel.collection_name].find_one({"property_id": property_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Property ID is already registered")
+    
     # 1. Upload files to IPFS
     uploaded_documents = []
     for file in files:
@@ -53,6 +68,7 @@ async def register_land(
     
     # 2. Create Land Record
     land_data = {
+        "property_id": property_id,
         "owner_id": ObjectId(current_user.id),
         "title": title,
         "description": description,
@@ -103,6 +119,39 @@ async def get_my_lands(current_user: UserInDB = Depends(get_current_user), db = 
         
     return result
 
+@router.get("/transfers/my")
+async def get_my_transfers(
+    current_user: UserInDB = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Get all incoming and outgoing pending/paid/disputed transfers for the current user"""
+    collection = db[LandModel.collection_name]
+    
+    # Incoming
+    incoming_cursor = collection.find({
+        "pending_buyer_id": str(current_user.id),
+        "transfer_status": {"$in": ["pending", "paid", "disputed"]}
+    })
+    incoming = await incoming_cursor.to_list(length=100)
+    
+    # Outgoing
+    outgoing_cursor = collection.find({
+        "owner_id": ObjectId(current_user.id),
+        "transfer_status": {"$in": ["pending", "paid", "disputed"]}
+    })
+    outgoing = await outgoing_cursor.to_list(length=100)
+    
+    # Format IDs
+    for item in incoming + outgoing:
+        item["_id"] = str(item["_id"])
+        item["id"] = item["_id"]
+        if "owner_id" in item:
+            item["owner_id"] = str(item["owner_id"])
+        
+    return {
+        "incoming": incoming,
+        "outgoing": outgoing
+    }
 
 # ==================== VERIFICATION ENDPOINTS ====================
 # IMPORTANT: These static routes MUST be defined before /{land_id}
@@ -208,6 +257,7 @@ async def mint_land(
     # Call blockchain service — raises on failure (error propagated to HTTP response)
     try:
         result = blockchain_service.register_land(
+            property_id=land.get("property_id"),
             ipfs_hash=ipfs_hash,
             area=area,
             price=price,
@@ -338,6 +388,27 @@ async def get_land(land_id: str, db = Depends(get_database)):
     land["id"] = str(land["_id"])
     land["owner_id"] = str(land["owner_id"])
     return land
+
+
+@router.delete("/{land_id}")
+async def delete_land(
+    land_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Delete a rejected land application"""
+    if not ObjectId.is_valid(land_id):
+        raise HTTPException(status_code=400, detail="Invalid land ID format")
+        
+    land = await db[LandModel.collection_name].find_one({"_id": ObjectId(land_id)})
+    if not land or str(land["owner_id"]) != str(current_user.id):
+        raise HTTPException(status_code=404, detail="Land not found or unauthorized")
+        
+    if land.get("status") != "rejected":
+        raise HTTPException(status_code=400, detail="Only rejected applications can be deleted")
+        
+    await db[LandModel.collection_name].delete_one({"_id": ObjectId(land_id)})
+    return {"message": "Rejected application deleted successfully"}
 
 
 @router.post("/{land_id}/verify", response_model=VerifyLandResponse)
@@ -520,3 +591,246 @@ async def reject_land(
         ),
         etherscan_url=f"https://sepolia.etherscan.io/tx/{result['tx_hash']}"
     )
+
+# ==================== TRANSFER & ESCROW ENDPOINTS ====================
+
+@router.patch("/{land_id}/for-sale", response_model=LandResponse)
+async def toggle_for_sale(
+    land_id: str,
+    request: ToggleForSaleRequest,
+    current_user: UserInDB = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    if not ObjectId.is_valid(land_id):
+        raise HTTPException(status_code=400, detail="Invalid land ID format")
+
+    land = await db[LandModel.collection_name].find_one({"_id": ObjectId(land_id)})
+    if not land or str(land["owner_id"]) != str(current_user.id):
+        raise HTTPException(status_code=404, detail="Land not found or unauthorized")
+
+    if land.get("blockchain_status") != "verified":
+        raise HTTPException(status_code=400, detail="Only verified properties can be listed for sale")
+
+    await db[LandModel.collection_name].update_one(
+        {"_id": ObjectId(land_id)},
+        {"$set": {"is_for_sale": request.is_for_sale, "updated_at": datetime.utcnow()}}
+    )
+    
+    land = await db[LandModel.collection_name].find_one({"_id": ObjectId(land_id)})
+    land["id"] = str(land["_id"])
+    land["owner_id"] = str(land["owner_id"])
+    return land
+
+
+@router.post("/{land_id}/transfer/initiate")
+async def initiate_transfer(
+    land_id: str,
+    request: InitiateTransferRequest,
+    current_user: UserInDB = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Seller initiates a transfer to a buyer"""
+    if not ObjectId.is_valid(land_id):
+        raise HTTPException(status_code=400, detail="Invalid land ID format")
+
+    land = await db[LandModel.collection_name].find_one({"_id": ObjectId(land_id)})
+    if not land or str(land["owner_id"]) != str(current_user.id):
+        raise HTTPException(status_code=404, detail="Land not found or unauthorized")
+
+    if land.get("blockchain_status") != "verified":
+        raise HTTPException(status_code=400, detail="Only verified properties can be transferred")
+
+    if land.get("transfer_status") in ["pending", "paid", "disputed"]:
+        raise HTTPException(status_code=400, detail="Property is already in a transfer process")
+
+    buyer = await db[UserModel.collection_name].find_one({"email": request.buyer_email})
+    if not buyer:
+        raise HTTPException(status_code=404, detail="Buyer email not found in the system")
+        
+    if str(buyer["_id"]) == str(current_user.id):
+        raise HTTPException(status_code=400, detail="Cannot transfer property to yourself")
+
+    await db[LandModel.collection_name].update_one(
+        {"_id": ObjectId(land_id)},
+        {"$set": {
+            "transfer_status": "pending",
+            "pending_buyer_id": str(buyer["_id"]),
+            "is_for_sale": False, # Lock property
+            "updated_at": datetime.utcnow()
+        }}
+    )
+
+    return {"message": "Transfer initiated successfully. Property is now locked."}
+
+
+@router.post("/{land_id}/transfer/mark-paid")
+async def mark_transfer_paid(
+    land_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Buyer marks a transfer as paid"""
+    if not ObjectId.is_valid(land_id):
+        raise HTTPException(status_code=400, detail="Invalid land ID format")
+
+    land = await db[LandModel.collection_name].find_one({"_id": ObjectId(land_id)})
+    if not land or land.get("pending_buyer_id") != str(current_user.id):
+        raise HTTPException(status_code=404, detail="You are not the pending buyer for this property")
+
+    if land.get("transfer_status") != "pending":
+        raise HTTPException(status_code=400, detail="Transfer is not in a pending state")
+
+    await db[LandModel.collection_name].update_one(
+        {"_id": ObjectId(land_id)},
+        {"$set": {
+            "transfer_status": "paid",
+            "updated_at": datetime.utcnow()
+        }}
+    )
+
+    return {"message": "Transfer marked as paid. Waiting for seller to release property."}
+
+
+@router.post("/{land_id}/transfer/release")
+async def release_transfer(
+    land_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Seller releases property to buyer"""
+    if not ObjectId.is_valid(land_id):
+        raise HTTPException(status_code=400, detail="Invalid land ID format")
+
+    land = await db[LandModel.collection_name].find_one({"_id": ObjectId(land_id)})
+    if not land or str(land["owner_id"]) != str(current_user.id):
+        raise HTTPException(status_code=404, detail="Unauthorized")
+
+    if land.get("transfer_status") not in ["pending", "paid", "disputed"]:
+        raise HTTPException(status_code=400, detail="Property is not in a transfer process")
+
+    buyer_id = land.get("pending_buyer_id")
+    
+    await db[LandModel.collection_name].update_one(
+        {"_id": ObjectId(land_id)},
+        {"$set": {
+            "owner_id": ObjectId(buyer_id),
+            "transfer_status": "none",
+            "pending_buyer_id": None,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+
+    return {"message": "Property successfully released to buyer."}
+
+
+@router.post("/{land_id}/transfer/cancel")
+async def cancel_transfer(
+    land_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Seller or Buyer cancels the transfer before payment"""
+    if not ObjectId.is_valid(land_id):
+        raise HTTPException(status_code=400, detail="Invalid land ID format")
+
+    land = await db[LandModel.collection_name].find_one({"_id": ObjectId(land_id)})
+    if not land:
+        raise HTTPException(status_code=404, detail="Land not found")
+        
+    is_seller = str(land["owner_id"]) == str(current_user.id)
+    is_buyer = land.get("pending_buyer_id") == str(current_user.id)
+    
+    if not (is_seller or is_buyer):
+        raise HTTPException(status_code=404, detail="Unauthorized")
+
+    if land.get("transfer_status") == "paid" and is_seller:
+         raise HTTPException(status_code=400, detail="Cannot cancel a paid transfer. Use the dispute feature if there is an issue.")
+
+    await db[LandModel.collection_name].update_one(
+        {"_id": ObjectId(land_id)},
+        {"$set": {
+            "transfer_status": "none",
+            "pending_buyer_id": None,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+
+    return {"message": "Transfer cancelled successfully."}
+
+
+@router.post("/{land_id}/transfer/dispute")
+async def dispute_transfer(
+    land_id: str,
+    request: DisputeTransferRequest,
+    current_user: UserInDB = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Buyer disputes if they paid but seller didn't release"""
+    if not ObjectId.is_valid(land_id):
+        raise HTTPException(status_code=400, detail="Invalid land ID format")
+
+    land = await db[LandModel.collection_name].find_one({"_id": ObjectId(land_id)})
+    if not land or land.get("pending_buyer_id") != str(current_user.id):
+         raise HTTPException(status_code=404, detail="Unauthorized")
+
+    if land.get("transfer_status") != "paid":
+         raise HTTPException(status_code=400, detail="Can only dispute a paid transfer")
+
+    await db[LandModel.collection_name].update_one(
+        {"_id": ObjectId(land_id)},
+        {"$set": {
+            "transfer_status": "disputed",
+            "transfer_dispute_reason": request.reason,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+
+    return {"message": "Transfer put into disputed state. Admin will resolve."}
+
+
+@router.post("/{land_id}/transfer/resolve-dispute")
+async def resolve_dispute(
+    land_id: str,
+    request: ResolveDisputeRequest,
+    current_user: UserInDB = Depends(get_current_verifier_or_admin),
+    db = Depends(get_database)
+):
+    """Admin resolves a dispute"""
+    if not ObjectId.is_valid(land_id):
+        raise HTTPException(status_code=400, detail="Invalid land ID format")
+
+    land = await db[LandModel.collection_name].find_one({"_id": ObjectId(land_id)})
+    if not land:
+         raise HTTPException(status_code=404, detail="Land not found")
+
+    if land.get("transfer_status") != "disputed":
+         raise HTTPException(status_code=400, detail="Transfer is not disputed")
+
+    if request.resolution == "force_transfer":
+        buyer_id = land.get("pending_buyer_id")
+        await db[LandModel.collection_name].update_one(
+            {"_id": ObjectId(land_id)},
+            {"$set": {
+                "owner_id": ObjectId(buyer_id),
+                "transfer_status": "none",
+                "pending_buyer_id": None,
+                "transfer_dispute_reason": None,
+                "updated_at": datetime.utcnow()
+            }}
+        )
+        return {"message": "Dispute resolved. Property forcefully transferred to buyer."}
+        
+    elif request.resolution == "cancel_transfer":
+        await db[LandModel.collection_name].update_one(
+            {"_id": ObjectId(land_id)},
+            {"$set": {
+                "transfer_status": "none",
+                "pending_buyer_id": None,
+                "transfer_dispute_reason": None,
+                "updated_at": datetime.utcnow()
+            }}
+        )
+        return {"message": "Dispute resolved. Transfer cancelled."}
+    else:
+        raise HTTPException(status_code=400, detail="Invalid resolution type")
+
