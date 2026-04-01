@@ -676,18 +676,18 @@ export const Dashboard = () => {
                             <div className="flex gap-2">
                               {land.transfer_status === 'none' && (
                                 <>
-                                  <Button 
-                                    variant={land.is_for_sale ? "outline" : "default"} 
-                                    size="sm" 
+                                  <Button
+                                    variant={land.is_for_sale ? "outline" : "default"}
+                                    size="sm"
                                     className="flex-1"
                                     onClick={() => handleToggleForSale(land.id, land.is_for_sale)}
                                   >
                                     <Tag className="h-4 w-4 mr-2" />
                                     {land.is_for_sale ? "Unlist from Marketplace" : "List on Marketplace"}
                                   </Button>
-                                  <Button 
-                                    variant="secondary" 
-                                    size="sm" 
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
                                     className="flex-1"
                                     onClick={() => { setTransferLandId(land.id); setTransferModalOpen(true); }}
                                   >
@@ -734,10 +734,10 @@ export const Dashboard = () => {
                                 </div>
                               </div>
                             )}
-                            <Button 
-                              variant="destructive" 
-                              size="sm" 
-                              className="w-full mt-2" 
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="w-full mt-2"
                               onClick={(e) => { e.stopPropagation(); handleDeleteRejected(land.id); }}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
